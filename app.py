@@ -75,12 +75,14 @@ COL_TARGET_DATE = "ಕಾಮಗಾರಿ ಮುಕ್ತಾಯಗೊಳಿಸಬ
 COL_ACTUAL_DATE = "ಮುಕ್ತಾಯವಾದ ದಿನಾಂಕ"
 COL_STATUS_STD = "CP/CF/P/TBS/TP/ETS/OTH"
 
+# Keep your Google Sheet URL in Streamlit Secrets as SHEET_URL or paste it below
 DEFAULT_SHEET_URL = st.secrets.get(
     "SHEET_URL",
-    "https://docs.google.com/spreadsheets/d/13W04z-fdU3RhuVJ5vQFRpK4BBSQRJWfscPqpr7Oj2Y8/edit?gid=1055199869#gid=1055199869",
+    "PASTE_YOUR_GOOGLE_SHEET_LINK_HERE",
 )
 
-DISK_BACKUP_FILE = "/tmp/mi_overdue_shared_snapshot_v3.pkl"
+# Bumped to v4 so SCP (Borewell) is freshly parsed right away
+DISK_BACKUP_FILE = "/tmp/mi_overdue_shared_snapshot_v4.pkl"
 
 
 # -----------------------------------------------------------------------------
@@ -229,20 +231,44 @@ def build_clean_unique_headers(raw_headers: list[str], col_idx_map: dict) -> lis
 
 
 def parse_indian_date(series: pd.Series) -> pd.Series:
-    """Safely parse dates (handling datetime objects and DD-MM-YYYY / DD.MM.YYYY strings)."""
-    def _clean_date(val):
+    """
+    Safely parse dates cell-by-cell into timezone-naive Timestamps.
+    Prevents 'Mixed timezones detected' errors on sheets like SCP (Borewell).
+    """
+    def _parse_single_date(val):
         if val is None or pd.isna(val):
             return pd.NaT
         if isinstance(val, (datetime, pd.Timestamp)):
-            return pd.Timestamp(val.date())
-        s = normalize_text(val)
-        if not s or s.upper() in {"-", "--", "NIL", "NA", "N/A", "NONE", ""}:
-            return pd.NaT
-        s = re.sub(r"[./]", "-", s)
-        return s
+            return pd.Timestamp(val.year, val.month, val.day)
 
-    cleaned = series.map(_clean_date)
-    return pd.to_datetime(cleaned, dayfirst=True, errors="coerce")
+        s = normalize_text(val)
+        if not s or s.upper() in {"-", "--", "---", "NIL", "NA", "N/A", "NONE", ""}:
+            return pd.NaT
+
+        # Replace dots and slashes with hyphens and strip stray trailing hyphens/spaces
+        s = re.sub(r"[./]", "-", s).strip(" -")
+
+        # Extract standard date pattern (DD-MM-YYYY or YYYY-MM-DD) if extra text exists
+        match = re.search(r"(\d{1,4}-\d{1,2}-\d{1,4})", s)
+        candidate = match.group(1) if match else s
+
+        try:
+            dt = pd.to_datetime(candidate, dayfirst=True, errors="coerce")
+            if pd.isna(dt):
+                return pd.NaT
+            if getattr(dt, "tzinfo", None) is not None:
+                dt = dt.tz_convert(None) if hasattr(dt, "tz_convert") else dt.replace(tzinfo=None)
+            return pd.Timestamp(dt.year, dt.month, dt.day)
+        except Exception:
+            try:
+                dt = pd.to_datetime(candidate, dayfirst=True, utc=True, errors="coerce")
+                if pd.isna(dt):
+                    return pd.NaT
+                return pd.Timestamp(dt.year, dt.month, dt.day)
+            except Exception:
+                return pd.NaT
+
+    return pd.to_datetime(series.map(_parse_single_date), errors="coerce")
 
 
 def is_empty_date(series: pd.Series) -> pd.Series:
@@ -812,10 +838,6 @@ else:
         x_axis_title = "Overdue Percentage (%)"
 
     else:
-        # Cumulative overlay:
-        # 1. Grey bar = Full length (Total Works) -> visible part is Rest of Works
-        # 2. Light Green bar = Overdue + ETS -> visible part right after Red is ETS Works
-        # 3. Red bar = Overdue Works -> visible part at the start is Overdue ('P')
         plot_df["overdue_plus_ets"] = plot_df["overdue_works"] + plot_df["ets_works"]
 
         fig.add_trace(
