@@ -83,15 +83,15 @@ DEFAULT_SHEET_URL = st.secrets.get(
     "https://docs.google.com/spreadsheets/d/13W04z-fdU3RhuVJ5vQFRpK4BBSQRJWfscPqpr7Oj2Y8/edit?gid=1055199869#gid=1055199869",
 )
 
-SCHEMA_VERSION = "v6_unassigned_included"
-DISK_BACKUP_FILE = "/tmp/mi_overdue_shared_snapshot_v6.pkl"
+SCHEMA_VERSION = "v7_date_overflow_fix"
+DISK_BACKUP_FILE = "/tmp/mi_overdue_shared_snapshot_v7.pkl"
 
 
 # -----------------------------------------------------------------------------
 # SHARED SERVER MEMORY & LOCK
 # -----------------------------------------------------------------------------
 @st.cache_resource
-def get_shared_state_v6() -> dict:
+def get_shared_state_v7() -> dict:
     state = {
         "version": SCHEMA_VERSION,
         "lock": threading.Lock(),
@@ -115,25 +115,27 @@ def get_shared_state_v6() -> dict:
 # -----------------------------------------------------------------------------
 # HELPER FUNCTIONS
 # -----------------------------------------------------------------------------
-def strip_tz_from_value(val):
-    """Remove timezone info from any datetime/Timestamp object."""
+def to_safe_python_date(val):
+    """
+    Convert any datetime/Timestamp/date object into a plain Python datetime.date.
+    Plain Python date objects support years 0001 to 9999 and never trigger
+    Pandas 'Cannot cast ... to unit=ns without overflow' or timezone errors.
+    """
     if val is None:
         return None
     if isinstance(val, pd.Timestamp):
-        if val.tzinfo is not None:
-            val = val.tz_convert(None)
-        return datetime(val.year, val.month, val.day)
+        return date(val.year, val.month, val.day)
     if isinstance(val, datetime):
-        return datetime(val.year, val.month, val.day)
+        return date(val.year, val.month, val.day)
     if isinstance(val, date):
-        return datetime(val.year, val.month, val.day)
+        return val
     return val
 
 
-def sanitize_dataframe_timezones(df: pd.DataFrame) -> pd.DataFrame:
-    """Ensure no column in a raw DataFrame contains mixed timezone objects."""
+def sanitize_dataframe_cells(df: pd.DataFrame) -> pd.DataFrame:
+    """Convert all datetime objects to plain Python date objects across the DataFrame."""
     cleaned_rows = [
-        [strip_tz_from_value(cell) for cell in row]
+        [to_safe_python_date(cell) for cell in row]
         for row in df.to_numpy().tolist()
     ]
     return pd.DataFrame(cleaned_rows, dtype=object)
@@ -143,14 +145,15 @@ def read_sheet_safely(
     excel_file: pd.ExcelFile, workbook_bytes: bytes, sheet_name: str
 ) -> pd.DataFrame:
     """
-    Read a worksheet while stripping any mixed-timezone datetime cells.
-    Falls back to direct openpyxl reading if pd.read_excel raises a timezone error.
+    Read a worksheet safely. If pd.read_excel fails due to out-of-bounds dates
+    (like year 0203 in 4702_A&P) or mixed timezones (in SCP Borewell),
+    automatically fall back to direct openpyxl cell reading.
     """
     try:
         raw_df = pd.read_excel(
             excel_file, sheet_name=sheet_name, header=None, dtype=object
         )
-        return sanitize_dataframe_timezones(raw_df)
+        return sanitize_dataframe_cells(raw_df)
     except Exception:
         wb = openpyxl.load_workbook(
             io.BytesIO(workbook_bytes), data_only=True, read_only=True
@@ -158,7 +161,7 @@ def read_sheet_safely(
         ws = wb[sheet_name]
         rows = []
         for row in ws.iter_rows(values_only=True):
-            cleaned_row = [strip_tz_from_value(cell) for cell in row]
+            cleaned_row = [to_safe_python_date(cell) for cell in row]
             if any(c is not None and str(c).strip() != "" for c in cleaned_row):
                 rows.append(cleaned_row)
             elif len(rows) < 35:
@@ -169,21 +172,31 @@ def read_sheet_safely(
 
 def normalize_text(val) -> str:
     """Collapse multiple spaces/newlines and strip text."""
-    val = strip_tz_from_value(val)
-    if val is None or pd.isna(val):
+    val = to_safe_python_date(val)
+    if val is None:
         return ""
-    if isinstance(val, (datetime, pd.Timestamp)):
-        return val.strftime("%d-%m-%Y")
+    if isinstance(val, date):
+        return f"{val.day:02d}-{val.month:02d}-{val.year:04d}"
+    try:
+        if pd.isna(val):
+            return ""
+    except Exception:
+        pass
     return re.sub(r"\s+", " ", str(val)).strip()
 
 
 def format_cell_for_display(val) -> str:
     """Format raw Excel cell values cleanly for table display and export."""
-    val = strip_tz_from_value(val)
-    if val is None or pd.isna(val):
+    val = to_safe_python_date(val)
+    if val is None:
         return ""
-    if isinstance(val, (datetime, pd.Timestamp)):
-        return val.strftime("%d-%m-%Y")
+    if isinstance(val, date):
+        return f"{val.day:02d}-{val.month:02d}-{val.year:04d}"
+    try:
+        if pd.isna(val):
+            return ""
+    except Exception:
+        pass
     if isinstance(val, float) and val.is_integer():
         return str(int(val))
     return normalize_text(val)
@@ -286,50 +299,64 @@ def build_clean_unique_headers(raw_headers: list[str], col_idx_map: dict) -> lis
     return unique_headers
 
 
-def parse_indian_date(series: pd.Series) -> pd.Series:
+def parse_indian_date_list(series: pd.Series) -> list:
     """
-    Parse dates cell-by-cell in pure Python using utc=True and convert to
-    timezone-naive Timestamps so 'Mixed timezones detected' can never occur.
+    Parse dates into a list of plain Python `datetime.date` objects (or `None`).
+    Completely avoids Pandas nanosecond (`unit='ns'`) overflow on typo years like 0203.
     """
     parsed_dates = []
     for raw_val in series.tolist():
-        val = strip_tz_from_value(raw_val)
-        if val is None or pd.isna(val):
-            parsed_dates.append(pd.NaT)
+        val = to_safe_python_date(raw_val)
+        if val is None:
+            parsed_dates.append(None)
             continue
 
-        if isinstance(val, (datetime, pd.Timestamp)):
-            parsed_dates.append(pd.Timestamp(val.year, val.month, val.day))
+        if isinstance(val, date):
+            parsed_dates.append(val)
             continue
 
         s = normalize_text(val)
         if not s or s.upper() in {"-", "--", "---", "NIL", "NA", "N/A", "NONE", ""}:
-            parsed_dates.append(pd.NaT)
+            parsed_dates.append(None)
             continue
 
         s = re.sub(r"[./]", "-", s).strip(" -")
-        match = re.search(r"(\d{1,4}-\d{1,2}-\d{1,4})", s)
-        candidate = match.group(1) if match else s
+        match = re.search(r"(\d{1,4})-(\d{1,2})-(\d{1,4})", s)
+        if match:
+            p1, p2, p3 = int(match.group(1)), int(match.group(2)), int(match.group(3))
+            try:
+                if p1 > 31:
+                    # YYYY-MM-DD
+                    parsed_dates.append(date(max(1, min(9999, p1)), p2, p3))
+                else:
+                    # DD-MM-YYYY (handle 2-digit years like 24 -> 2024)
+                    yr = p3 + 2000 if p3 < 100 else p3
+                    parsed_dates.append(date(max(1, min(9999, yr)), p2, p1))
+                continue
+            except Exception:
+                pass
 
         try:
-            dt = pd.to_datetime(candidate, dayfirst=True, utc=True, errors="coerce")
+            dt = pd.to_datetime(s, dayfirst=True, utc=True, errors="coerce")
             if pd.isna(dt):
-                parsed_dates.append(pd.NaT)
+                parsed_dates.append(None)
             else:
-                parsed_dates.append(pd.Timestamp(dt.year, dt.month, dt.day))
+                parsed_dates.append(date(dt.year, dt.month, dt.day))
         except Exception:
-            parsed_dates.append(pd.NaT)
+            parsed_dates.append(None)
 
-    return pd.Series(parsed_dates, index=series.index, dtype="datetime64[ns]")
+    return parsed_dates
 
 
 def is_empty_date(series: pd.Series) -> pd.Series:
     """Check if the 'ಮುಕ್ತಾಯವಾದ ದಿನಾಂಕ' cell is empty or placeholder text."""
     results = []
     for raw_val in series.tolist():
-        val = strip_tz_from_value(raw_val)
-        if val is None or pd.isna(val):
+        val = to_safe_python_date(raw_val)
+        if val is None:
             results.append(True)
+        elif isinstance(val, date):
+            results.append(False)
         else:
             s = normalize_text(val)
             results.append(
@@ -374,7 +401,6 @@ def is_summary_or_index_row(
     if status_val.isdigit() and (so_val.isdigit() or aee_val.isdigit()):
         return True
 
-    # Check first 8 cells of the row for 'ಒಟ್ಟು' or 'Total' summary labels
     head_text = " | ".join(normalize_text(c) for c in row_vals[:8]).upper()
     if (
         "ಒಟ್ಟು" in head_text
@@ -401,7 +427,7 @@ def convert_df_to_excel_bytes(df: pd.DataFrame) -> bytes:
 
 
 def parse_xlsx_workbook(workbook_bytes: bytes):
-    """Parse all 23 target worksheets and keep unassigned officer works."""
+    """Parse all 23 target worksheets safely without date overflow or timezone errors."""
     progress = st.progress(0, text="Opening workbook...")
 
     try:
@@ -413,7 +439,7 @@ def parse_xlsx_workbook(workbook_bytes: bytes):
         normalize_text(name).lower(): name for name in excel_file.sheet_names
     }
 
-    today_ist = pd.Timestamp(datetime.now(ZoneInfo("Asia/Kolkata")).date())
+    today_ist_date = datetime.now(ZoneInfo("Asia/Kolkata")).date()
 
     compiled_rows = []
     full_overdue_rows = []
@@ -534,21 +560,25 @@ def parse_xlsx_workbook(workbook_bytes: bytes):
             s_target_raw = df.iloc[:, col_idx_map["target_date"]]
             s_actual_raw = df.iloc[:, col_idx_map["actual_date"]]
 
-            target_dt = parse_indian_date(s_target_raw)
+            target_date_list = parse_indian_date_list(s_target_raw)
             actual_empty = is_empty_date(s_actual_raw)
 
             is_status_p = s_status_upper == "P"
             is_status_ets = s_status_upper == "ETS"
 
-            # Overdue Logic: Status is 'P'/'p', target date < Today, actual completion date is empty
-            is_overdue = (
-                is_status_p
-                & target_dt.notna()
-                & (target_dt < today_ist)
-                & actual_empty
+            target_is_before_today = pd.Series(
+                [
+                    (d is not None) and (d < today_ist_date)
+                    for d in target_date_list
+                ],
+                index=df.index,
+                dtype=bool,
             )
 
-            # Determine valid work rows (has status/officer/date and is not a total/header row)
+            # Overdue Logic: Status is 'P'/'p', target date < Today, actual completion date is empty
+            is_overdue = is_status_p & target_is_before_today & actual_empty
+
+            # Determine valid work rows
             row_lists = df.to_numpy().tolist()
             valid_flags = []
             for r_idx, r_vals in enumerate(row_lists):
@@ -559,7 +589,7 @@ def parse_xlsx_workbook(workbook_bytes: bytes):
                     (st_v != "")
                     or (so_v != "")
                     or (aee_v != "")
-                    or pd.notna(target_dt.iat[r_idx])
+                    or (target_date_list[r_idx] is not None)
                 )
                 if not has_key_data:
                     valid_flags.append(False)
@@ -570,7 +600,6 @@ def parse_xlsx_workbook(workbook_bytes: bytes):
 
             valid_row_mask = pd.Series(valid_flags, index=df.index, dtype=bool)
 
-            # Map empty officer names to UNASSIGNED_LABEL
             s_so_mapped = s_so_raw.map(map_officer_or_unassigned)
             s_aee_mapped = s_aee_raw.map(map_officer_or_unassigned)
 
@@ -586,7 +615,6 @@ def parse_xlsx_workbook(workbook_bytes: bytes):
                     "actual_date_raw": [
                         format_cell_for_display(v) for v in s_actual_raw.tolist()
                     ],
-                    "target_dt": target_dt,
                     "actual_empty": actual_empty,
                     "is_status_p": is_status_p,
                     "is_status_ets": is_status_ets,
@@ -654,7 +682,7 @@ def parse_xlsx_workbook(workbook_bytes: bytes):
         else pd.DataFrame()
     )
     diag_df = pd.DataFrame(sheet_diagnostics)
-    return master_df, overdue_full_df, diag_df, today_ist.strftime("%d-%m-%Y")
+    return master_df, overdue_full_df, diag_df, today_ist_date.strftime("%d-%m-%Y")
 
 
 def save_shared_state(state: dict, data_tuple, source_label: str):
@@ -738,7 +766,7 @@ show_unassigned_bar = st.sidebar.checkbox(
 # -----------------------------------------------------------------------------
 st.title("📊 Minor Irrigation — Overdue Works Dashboard")
 
-shared_state = get_shared_state_v6()
+shared_state = get_shared_state_v7()
 
 if uploaded_xlsx is not None:
     file_id = f"{uploaded_xlsx.name}_{uploaded_xlsx.size}_{SCHEMA_VERSION}"
@@ -848,7 +876,7 @@ summary_df["overdue_pct"] = (
     (summary_df["overdue_works"] / summary_df["total_works"]) * 100
 ).round(1).fillna(0.0)
 
-# Flag unassigned bucket so it always stays pinned at the very bottom
+# Pin Unassigned bucket at the bottom
 summary_df["_is_unassigned"] = summary_df[view_choice] == UNASSIGNED_LABEL
 
 if sort_choice == "Highest Overdue Percentage (%) at Top":
@@ -901,7 +929,6 @@ st.divider()
 st.subheader(f"📈 Overdue & ETS Works by {view_choice} ({sort_choice})")
 
 if hide_zero_overdue:
-    # Keep officers with Overdue > 0 AND always keep the Unassigned bar at the bottom
     chart_source_df = summary_df[
         (summary_df["overdue_works"] > 0) | summary_df["_is_unassigned"]
     ].copy()
@@ -911,7 +938,6 @@ else:
 if chart_source_df.empty:
     st.info("No officers match the current filter.")
 else:
-    # Reversing puts index 0 at the TOP and the last row (Unassigned) at the BOTTOM
     plot_df = chart_source_df.iloc[::-1].copy()
     plot_df["y_short"] = plot_df[view_choice].map(lambda s: shorten_label(s, 28))
 
