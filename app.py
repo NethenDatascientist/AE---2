@@ -4,9 +4,10 @@ import pickle
 import re
 import threading
 import time
-from datetime import datetime
+from datetime import date, datetime
 from zoneinfo import ZoneInfo
 
+import openpyxl
 import pandas as pd
 import plotly.graph_objects as go
 import requests
@@ -75,26 +76,24 @@ COL_TARGET_DATE = "ಕಾಮಗಾರಿ ಮುಕ್ತಾಯಗೊಳಿಸಬ
 COL_ACTUAL_DATE = "ಮುಕ್ತಾಯವಾದ ದಿನಾಂಕ"
 COL_STATUS_STD = "CP/CF/P/TBS/TP/ETS/OTH"
 
-# Keep your Google Sheet URL in Streamlit Secrets as SHEET_URL or paste it below
+UNASSIGNED_LABEL = "ಹೆಸರು ನಮೂದಿಸಿಲ್ಲ / Unassigned (Empty)"
+
 DEFAULT_SHEET_URL = st.secrets.get(
     "SHEET_URL",
-    "PASTE_YOUR_GOOGLE_SHEET_LINK_HERE",
+    "https://docs.google.com/spreadsheets/d/13W04z-fdU3RhuVJ5vQFRpK4BBSQRJWfscPqpr7Oj2Y8/edit?gid=1055199869#gid=1055199869",
 )
 
-# Bumped to v4 so SCP (Borewell) is freshly parsed right away
-DISK_BACKUP_FILE = "/tmp/mi_overdue_shared_snapshot_v4.pkl"
+SCHEMA_VERSION = "v6_unassigned_included"
+DISK_BACKUP_FILE = "/tmp/mi_overdue_shared_snapshot_v6.pkl"
 
 
 # -----------------------------------------------------------------------------
-# SHARED SERVER MEMORY & LOCK (Prevents 410 Gone when multiple screens connect)
+# SHARED SERVER MEMORY & LOCK
 # -----------------------------------------------------------------------------
 @st.cache_resource
-def get_shared_state() -> dict:
-    """
-    Shared across ALL browser sessions/screens connected to this Streamlit app.
-    Ensures only one download happens at a time and all screens share the data.
-    """
+def get_shared_state_v6() -> dict:
     state = {
+        "version": SCHEMA_VERSION,
         "lock": threading.Lock(),
         "data": None,
         "last_synced": None,
@@ -104,9 +103,10 @@ def get_shared_state() -> dict:
         try:
             with open(DISK_BACKUP_FILE, "rb") as f:
                 saved = pickle.load(f)
-                state["data"] = saved.get("data")
-                state["last_synced"] = saved.get("last_synced")
-                state["source_label"] = saved.get("source_label")
+                if saved.get("version") == SCHEMA_VERSION:
+                    state["data"] = saved.get("data")
+                    state["last_synced"] = saved.get("last_synced")
+                    state["source_label"] = saved.get("source_label")
         except Exception:
             pass
     return state
@@ -115,15 +115,71 @@ def get_shared_state() -> dict:
 # -----------------------------------------------------------------------------
 # HELPER FUNCTIONS
 # -----------------------------------------------------------------------------
+def strip_tz_from_value(val):
+    """Remove timezone info from any datetime/Timestamp object."""
+    if val is None:
+        return None
+    if isinstance(val, pd.Timestamp):
+        if val.tzinfo is not None:
+            val = val.tz_convert(None)
+        return datetime(val.year, val.month, val.day)
+    if isinstance(val, datetime):
+        return datetime(val.year, val.month, val.day)
+    if isinstance(val, date):
+        return datetime(val.year, val.month, val.day)
+    return val
+
+
+def sanitize_dataframe_timezones(df: pd.DataFrame) -> pd.DataFrame:
+    """Ensure no column in a raw DataFrame contains mixed timezone objects."""
+    cleaned_rows = [
+        [strip_tz_from_value(cell) for cell in row]
+        for row in df.to_numpy().tolist()
+    ]
+    return pd.DataFrame(cleaned_rows, dtype=object)
+
+
+def read_sheet_safely(
+    excel_file: pd.ExcelFile, workbook_bytes: bytes, sheet_name: str
+) -> pd.DataFrame:
+    """
+    Read a worksheet while stripping any mixed-timezone datetime cells.
+    Falls back to direct openpyxl reading if pd.read_excel raises a timezone error.
+    """
+    try:
+        raw_df = pd.read_excel(
+            excel_file, sheet_name=sheet_name, header=None, dtype=object
+        )
+        return sanitize_dataframe_timezones(raw_df)
+    except Exception:
+        wb = openpyxl.load_workbook(
+            io.BytesIO(workbook_bytes), data_only=True, read_only=True
+        )
+        ws = wb[sheet_name]
+        rows = []
+        for row in ws.iter_rows(values_only=True):
+            cleaned_row = [strip_tz_from_value(cell) for cell in row]
+            if any(c is not None and str(c).strip() != "" for c in cleaned_row):
+                rows.append(cleaned_row)
+            elif len(rows) < 35:
+                rows.append(cleaned_row)
+        wb.close()
+        return pd.DataFrame(rows, dtype=object)
+
+
 def normalize_text(val) -> str:
     """Collapse multiple spaces/newlines and strip text."""
+    val = strip_tz_from_value(val)
     if val is None or pd.isna(val):
         return ""
+    if isinstance(val, (datetime, pd.Timestamp)):
+        return val.strftime("%d-%m-%Y")
     return re.sub(r"\s+", " ", str(val)).strip()
 
 
 def format_cell_for_display(val) -> str:
     """Format raw Excel cell values cleanly for table display and export."""
+    val = strip_tz_from_value(val)
     if val is None or pd.isna(val):
         return ""
     if isinstance(val, (datetime, pd.Timestamp)):
@@ -232,73 +288,107 @@ def build_clean_unique_headers(raw_headers: list[str], col_idx_map: dict) -> lis
 
 def parse_indian_date(series: pd.Series) -> pd.Series:
     """
-    Safely parse dates cell-by-cell into timezone-naive Timestamps.
-    Prevents 'Mixed timezones detected' errors on sheets like SCP (Borewell).
+    Parse dates cell-by-cell in pure Python using utc=True and convert to
+    timezone-naive Timestamps so 'Mixed timezones detected' can never occur.
     """
-    def _parse_single_date(val):
+    parsed_dates = []
+    for raw_val in series.tolist():
+        val = strip_tz_from_value(raw_val)
         if val is None or pd.isna(val):
-            return pd.NaT
+            parsed_dates.append(pd.NaT)
+            continue
+
         if isinstance(val, (datetime, pd.Timestamp)):
-            return pd.Timestamp(val.year, val.month, val.day)
+            parsed_dates.append(pd.Timestamp(val.year, val.month, val.day))
+            continue
 
         s = normalize_text(val)
         if not s or s.upper() in {"-", "--", "---", "NIL", "NA", "N/A", "NONE", ""}:
-            return pd.NaT
+            parsed_dates.append(pd.NaT)
+            continue
 
-        # Replace dots and slashes with hyphens and strip stray trailing hyphens/spaces
         s = re.sub(r"[./]", "-", s).strip(" -")
-
-        # Extract standard date pattern (DD-MM-YYYY or YYYY-MM-DD) if extra text exists
         match = re.search(r"(\d{1,4}-\d{1,2}-\d{1,4})", s)
         candidate = match.group(1) if match else s
 
         try:
-            dt = pd.to_datetime(candidate, dayfirst=True, errors="coerce")
+            dt = pd.to_datetime(candidate, dayfirst=True, utc=True, errors="coerce")
             if pd.isna(dt):
-                return pd.NaT
-            if getattr(dt, "tzinfo", None) is not None:
-                dt = dt.tz_convert(None) if hasattr(dt, "tz_convert") else dt.replace(tzinfo=None)
-            return pd.Timestamp(dt.year, dt.month, dt.day)
+                parsed_dates.append(pd.NaT)
+            else:
+                parsed_dates.append(pd.Timestamp(dt.year, dt.month, dt.day))
         except Exception:
-            try:
-                dt = pd.to_datetime(candidate, dayfirst=True, utc=True, errors="coerce")
-                if pd.isna(dt):
-                    return pd.NaT
-                return pd.Timestamp(dt.year, dt.month, dt.day)
-            except Exception:
-                return pd.NaT
+            parsed_dates.append(pd.NaT)
 
-    return pd.to_datetime(series.map(_parse_single_date), errors="coerce")
+    return pd.Series(parsed_dates, index=series.index, dtype="datetime64[ns]")
 
 
 def is_empty_date(series: pd.Series) -> pd.Series:
     """Check if the 'ಮುಕ್ತಾಯವಾದ ದಿನಾಂಕ' cell is empty or placeholder text."""
-    def _check_empty(val):
+    results = []
+    for raw_val in series.tolist():
+        val = strip_tz_from_value(raw_val)
         if val is None or pd.isna(val):
-            return True
-        s = normalize_text(val)
-        return s.upper() in {"", "-", "--", "NIL", "NA", "N/A", "NONE", "NAT"}
+            results.append(True)
+        else:
+            s = normalize_text(val)
+            results.append(
+                s.upper() in {"", "-", "--", "---", "NIL", "NA", "N/A", "NONE", "NAT"}
+            )
+    return pd.Series(results, index=series.index, dtype=bool)
 
-    return series.map(_check_empty)
 
-
-def is_valid_officer_name(name: str) -> bool:
-    """Filter out empty cells, serial numbers, or summary rows like 'ಒಟ್ಟು' / 'Total'."""
-    if not name or len(name) > 65:
-        return False
+def map_officer_or_unassigned(name: str) -> str:
+    """
+    Map blank or placeholder officer cells to UNASSIGNED_LABEL instead of
+    dropping the row. Returns '' only if the cell is a summary/header token.
+    """
+    if not name:
+        return UNASSIGNED_LABEL
     upper = name.upper()
-    invalid_tokens = {
+    empty_tokens = {
         "NAN", "NONE", "-", "--", "---", "NIL", "NA", "N/A", "0", "ಇಲ್ಲ", "ಖಾಲಿ"
     }
-    if upper in invalid_tokens or name.isdigit():
-        return False
-    if "ಒಟ್ಟು" in name or "TOTAL" in upper or COL_SO in name or COL_AEE in name:
-        return False
-    return True
+    if upper in empty_tokens or name.isdigit():
+        return UNASSIGNED_LABEL
+    if (
+        len(name) > 65
+        or "ಒಟ್ಟು" in name
+        or "TOTAL" in upper
+        or COL_SO in name
+        or COL_AEE in name
+    ):
+        return ""
+    return name
 
 
-def shorten_label(name: str, max_len: int = 26) -> str:
+def is_summary_or_index_row(
+    row_vals: list, so_val: str, aee_val: str, status_val: str
+) -> bool:
+    """
+    Exclude repeated header rows, column-index rows (1, 2, 3, 4...),
+    and 'ಒಟ್ಟು' / 'Total' summary rows so only real works are counted.
+    """
+    if COL_SO in so_val or COL_AEE in aee_val or "CP/CF" in status_val.upper():
+        return True
+    if status_val.isdigit() and (so_val.isdigit() or aee_val.isdigit()):
+        return True
+
+    # Check first 8 cells of the row for 'ಒಟ್ಟು' or 'Total' summary labels
+    head_text = " | ".join(normalize_text(c) for c in row_vals[:8]).upper()
+    if (
+        "ಒಟ್ಟು" in head_text
+        or "GRAND TOTAL" in head_text
+        or re.search(r"\bTOTAL\b", head_text)
+    ):
+        return True
+    return False
+
+
+def shorten_label(name: str, max_len: int = 28) -> str:
     """Keep Y-axis labels compact so the chart always starts on the far left."""
+    if name == UNASSIGNED_LABEL:
+        return "⚠️ ಹೆಸರು ನಮೂದಿಸಿಲ್ಲ (Empty)"
     return name if len(name) <= max_len else name[: max_len - 1] + "…"
 
 
@@ -311,10 +401,7 @@ def convert_df_to_excel_bytes(df: pd.DataFrame) -> bytes:
 
 
 def parse_xlsx_workbook(workbook_bytes: bytes):
-    """
-    Parse the 23 target worksheets using pd.ExcelFile + pd.read_excel
-    (automatically uses fast Rust 'calamine' engine if installed, else 'openpyxl').
-    """
+    """Parse all 23 target worksheets and keep unassigned officer works."""
     progress = st.progress(0, text="Opening workbook...")
 
     try:
@@ -355,7 +442,7 @@ def parse_xlsx_workbook(workbook_bytes: bytes):
             continue
 
         try:
-            raw_df = pd.read_excel(excel_file, sheet_name=actual_sheet_name, header=None)
+            raw_df = read_sheet_safely(excel_file, workbook_bytes, actual_sheet_name)
             if raw_df.empty:
                 sheet_diagnostics.append(
                     {
@@ -370,7 +457,9 @@ def parse_xlsx_workbook(workbook_bytes: bytes):
 
             header_idx = None
             for idx in range(min(30, len(raw_df))):
-                row_text = " | ".join(normalize_text(v) for v in raw_df.iloc[idx].values)
+                row_text = " | ".join(
+                    normalize_text(v) for v in raw_df.iloc[idx].tolist()
+                )
                 if (
                     COL_SO in row_text
                     or COL_AEE in row_text
@@ -391,12 +480,18 @@ def parse_xlsx_workbook(workbook_bytes: bytes):
                 )
                 continue
 
-            raw_headers = [normalize_text(col) for col in raw_df.iloc[header_idx].values]
+            raw_headers = [
+                normalize_text(col) for col in raw_df.iloc[header_idx].tolist()
+            ]
             col_idx_map = find_matching_column_indices(raw_headers)
 
             required_keys = {"so", "aee", "target_date", "actual_date", "status"}
-            if (required_keys - set(col_idx_map.keys())) and (header_idx + 1 < len(raw_df)):
-                next_row = [normalize_text(col) for col in raw_df.iloc[header_idx + 1].values]
+            if (required_keys - set(col_idx_map.keys())) and (
+                header_idx + 1 < len(raw_df)
+            ):
+                next_row = [
+                    normalize_text(col) for col in raw_df.iloc[header_idx + 1].tolist()
+                ]
                 combined_headers = [
                     f"{h1} {h2}".strip() for h1, h2 in zip(raw_headers, next_row)
                 ]
@@ -420,9 +515,21 @@ def parse_xlsx_workbook(workbook_bytes: bytes):
 
             df = raw_df.iloc[header_idx + 1 :].reset_index(drop=True).copy()
 
-            s_so = df.iloc[:, col_idx_map["so"]].map(normalize_text)
-            s_aee = df.iloc[:, col_idx_map["aee"]].map(normalize_text)
-            s_status = df.iloc[:, col_idx_map["status"]].map(normalize_text)
+            s_so_raw = pd.Series(
+                [normalize_text(v) for v in df.iloc[:, col_idx_map["so"]].tolist()],
+                index=df.index,
+                dtype=str,
+            )
+            s_aee_raw = pd.Series(
+                [normalize_text(v) for v in df.iloc[:, col_idx_map["aee"]].tolist()],
+                index=df.index,
+                dtype=str,
+            )
+            s_status = pd.Series(
+                [normalize_text(v) for v in df.iloc[:, col_idx_map["status"]].tolist()],
+                index=df.index,
+                dtype=str,
+            )
             s_status_upper = s_status.str.upper().str.strip()
             s_target_raw = df.iloc[:, col_idx_map["target_date"]]
             s_actual_raw = df.iloc[:, col_idx_map["actual_date"]]
@@ -441,16 +548,44 @@ def parse_xlsx_workbook(workbook_bytes: bytes):
                 & actual_empty
             )
 
-            valid_row_mask = (s_status != "") | (s_so != "") | (s_aee != "")
+            # Determine valid work rows (has status/officer/date and is not a total/header row)
+            row_lists = df.to_numpy().tolist()
+            valid_flags = []
+            for r_idx, r_vals in enumerate(row_lists):
+                so_v = s_so_raw.iat[r_idx]
+                aee_v = s_aee_raw.iat[r_idx]
+                st_v = s_status.iat[r_idx]
+                has_key_data = (
+                    (st_v != "")
+                    or (so_v != "")
+                    or (aee_v != "")
+                    or pd.notna(target_dt.iat[r_idx])
+                )
+                if not has_key_data:
+                    valid_flags.append(False)
+                elif is_summary_or_index_row(r_vals, so_v, aee_v, st_v):
+                    valid_flags.append(False)
+                else:
+                    valid_flags.append(True)
+
+            valid_row_mask = pd.Series(valid_flags, index=df.index, dtype=bool)
+
+            # Map empty officer names to UNASSIGNED_LABEL
+            s_so_mapped = s_so_raw.map(map_officer_or_unassigned)
+            s_aee_mapped = s_aee_raw.map(map_officer_or_unassigned)
 
             sub = pd.DataFrame(
                 {
                     "sheet_name": target,
-                    "so_name": s_so,
-                    "aee_name": s_aee,
+                    "so_name": s_so_mapped,
+                    "aee_name": s_aee_mapped,
                     "status_raw": s_status,
-                    "target_date_raw": s_target_raw.map(format_cell_for_display),
-                    "actual_date_raw": s_actual_raw.map(format_cell_for_display),
+                    "target_date_raw": [
+                        format_cell_for_display(v) for v in s_target_raw.tolist()
+                    ],
+                    "actual_date_raw": [
+                        format_cell_for_display(v) for v in s_actual_raw.tolist()
+                    ],
                     "target_dt": target_dt,
                     "actual_empty": actual_empty,
                     "is_status_p": is_status_p,
@@ -467,19 +602,21 @@ def parse_xlsx_workbook(workbook_bytes: bytes):
                 full_df = df.loc[overdue_mask].copy()
                 full_df.columns = unique_headers
 
+                for col in full_df.columns:
+                    full_df[col] = [
+                        format_cell_for_display(v) for v in full_df[col].tolist()
+                    ]
+
                 unnamed_cols = [
                     c for c in full_df.columns if c.startswith("Unnamed_Col_")
                 ]
                 for u_col in unnamed_cols:
-                    if full_df[u_col].map(format_cell_for_display).eq("").all():
+                    if (full_df[u_col] == "").all():
                         full_df.drop(columns=[u_col], inplace=True)
 
-                for col in full_df.columns:
-                    full_df[col] = full_df[col].map(format_cell_for_display)
-
                 full_df.insert(0, "Worksheet / ಯೋಜನೆ", target)
-                full_df["_so_name"] = s_so.loc[overdue_mask].values
-                full_df["_aee_name"] = s_aee.loc[overdue_mask].values
+                full_df["_so_name"] = s_so_mapped.loc[overdue_mask].values
+                full_df["_aee_name"] = s_aee_mapped.loc[overdue_mask].values
 
                 full_overdue_rows.append(full_df.reset_index(drop=True))
 
@@ -523,6 +660,7 @@ def parse_xlsx_workbook(workbook_bytes: bytes):
 def save_shared_state(state: dict, data_tuple, source_label: str):
     """Save parsed dataset in shared RAM and on local disk."""
     now_str = datetime.now(ZoneInfo("Asia/Kolkata")).strftime("%d-%m-%Y %I:%M:%S %p")
+    state["version"] = SCHEMA_VERSION
     state["data"] = data_tuple
     state["last_synced"] = now_str
     state["source_label"] = source_label
@@ -530,6 +668,7 @@ def save_shared_state(state: dict, data_tuple, source_label: str):
         with open(DISK_BACKUP_FILE, "wb") as f:
             pickle.dump(
                 {
+                    "version": SCHEMA_VERSION,
                     "data": data_tuple,
                     "last_synced": now_str,
                     "source_label": source_label,
@@ -588,29 +727,49 @@ hide_zero_overdue = st.sidebar.checkbox(
     value=False,
 )
 
+show_unassigned_bar = st.sidebar.checkbox(
+    "Include Empty / Unassigned Officer bar at the bottom",
+    value=True,
+    help="Groups all works where the officer name is blank into a single bar pinned at the bottom.",
+)
+
 # -----------------------------------------------------------------------------
 # MAIN UI & THREAD-SAFE DATA LOADING
 # -----------------------------------------------------------------------------
 st.title("📊 Minor Irrigation — Overdue Works Dashboard")
 
-shared_state = get_shared_state()
+shared_state = get_shared_state_v6()
 
 if uploaded_xlsx is not None:
-    file_id = f"{uploaded_xlsx.name}_{uploaded_xlsx.size}"
+    file_id = f"{uploaded_xlsx.name}_{uploaded_xlsx.size}_{SCHEMA_VERSION}"
     if st.session_state.get("_last_uploaded_id") != file_id:
         with shared_state["lock"]:
             parsed = parse_xlsx_workbook(uploaded_xlsx.getvalue())
-            save_shared_state(shared_state, parsed, f"Uploaded File ({uploaded_xlsx.name})")
+            save_shared_state(
+                shared_state, parsed, f"Uploaded File ({uploaded_xlsx.name})"
+            )
             st.session_state["_last_uploaded_id"] = file_id
 
-elif shared_state["data"] is None or sync_clicked:
+elif (
+    shared_state["data"] is None
+    or shared_state.get("version") != SCHEMA_VERSION
+    or sync_clicked
+):
     with shared_state["lock"]:
-        if shared_state["data"] is None or sync_clicked:
-            with st.spinner("Downloading workbook snapshot from Google Sheets (takes ~15-20s)..."):
+        if (
+            shared_state["data"] is None
+            or shared_state.get("version") != SCHEMA_VERSION
+            or sync_clicked
+        ):
+            with st.spinner(
+                "Downloading workbook snapshot from Google Sheets (takes ~15-20s)..."
+            ):
                 try:
                     xlsx_bytes = download_xlsx_bytes(sheet_url_input)
                     parsed = parse_xlsx_workbook(xlsx_bytes)
-                    save_shared_state(shared_state, parsed, "Google Sheets Live Snapshot")
+                    save_shared_state(
+                        shared_state, parsed, "Google Sheets Live Snapshot"
+                    )
                 except Exception as e:
                     if shared_state["data"] is not None:
                         st.warning(
@@ -662,7 +821,10 @@ with ctrl_col2:
 group_col = "so_name" if view_choice == COL_SO else "aee_name"
 full_filter_col = "_so_name" if view_choice == COL_SO else "_aee_name"
 
-valid_df = master_df[master_df[group_col].map(is_valid_officer_name)].copy()
+valid_df = master_df[master_df[group_col] != ""].copy()
+
+if not show_unassigned_bar:
+    valid_df = valid_df[valid_df[group_col] != UNASSIGNED_LABEL].copy()
 
 if denominator_mode.startswith("Only Ongoing Works"):
     valid_df = valid_df[valid_df["is_status_p"]].copy()
@@ -678,7 +840,6 @@ summary_df = (
     .rename(columns={group_col: view_choice})
 )
 
-# Calculate rest of works (grey segment) and overdue percentage
 summary_df["rest_works"] = (
     summary_df["total_works"] - summary_df["overdue_works"] - summary_df["ets_works"]
 ).clip(lower=0)
@@ -687,15 +848,18 @@ summary_df["overdue_pct"] = (
     (summary_df["overdue_works"] / summary_df["total_works"]) * 100
 ).round(1).fillna(0.0)
 
+# Flag unassigned bucket so it always stays pinned at the very bottom
+summary_df["_is_unassigned"] = summary_df[view_choice] == UNASSIGNED_LABEL
+
 if sort_choice == "Highest Overdue Percentage (%) at Top":
     summary_df = summary_df.sort_values(
-        by=["overdue_pct", "overdue_works", "total_works"],
-        ascending=[False, False, False],
+        by=["_is_unassigned", "overdue_pct", "overdue_works", "total_works"],
+        ascending=[True, False, False, False],
     ).reset_index(drop=True)
 else:
     summary_df = summary_df.sort_values(
-        by=["overdue_works", "overdue_pct", "total_works"],
-        ascending=[False, False, False],
+        by=["_is_unassigned", "overdue_works", "overdue_pct", "total_works"],
+        ascending=[True, False, False, False],
     ).reset_index(drop=True)
 
 # -----------------------------------------------------------------------------
@@ -704,6 +868,11 @@ else:
 total_assigned_all = int(summary_df["total_works"].sum())
 total_overdue_all = int(summary_df["overdue_works"].sum())
 total_ets_all = int(summary_df["ets_works"].sum())
+named_officers_count = int((~summary_df["_is_unassigned"]).sum())
+unassigned_works_count = int(
+    summary_df.loc[summary_df["_is_unassigned"], "total_works"].sum()
+)
+
 overall_overdue_pct = (
     round((total_overdue_all / total_assigned_all) * 100, 1)
     if total_assigned_all > 0
@@ -712,8 +881,12 @@ overall_overdue_pct = (
 
 k1, k2, k3, k4, k5 = st.columns(5)
 k1.metric("📅 Comparison Date (Today)", today_str)
-k2.metric(f"👥 Total Officers ({view_choice})", len(summary_df))
-k3.metric("📋 Total Works Assigned", f"{total_assigned_all:,}")
+k2.metric(
+    f"👥 Officers ({view_choice})",
+    f"{named_officers_count:,}",
+    help=f"Plus {unassigned_works_count:,} works where {view_choice} is empty.",
+)
+k3.metric("📋 Total Works (incl. Empty)", f"{total_assigned_all:,}")
 k4.metric(
     "🔴 Total Overdue Works ('P')",
     f"{total_overdue_all:,} ({overall_overdue_pct}%)",
@@ -723,19 +896,22 @@ k5.metric("🟢 Total 'ETS' Works", f"{total_ets_all:,}")
 st.divider()
 
 # -----------------------------------------------------------------------------
-# HORIZONTAL BAR CHART (RED = OVERDUE 'P', LIGHT GREEN = 'ETS', GREY = REST)
+# HORIZONTAL BAR CHART (UNASSIGNED BAR PINNED AT THE BOTTOM)
 # -----------------------------------------------------------------------------
 st.subheader(f"📈 Overdue & ETS Works by {view_choice} ({sort_choice})")
 
-chart_source_df = (
-    summary_df[summary_df["overdue_works"] > 0].copy()
-    if hide_zero_overdue
-    else summary_df.copy()
-)
+if hide_zero_overdue:
+    # Keep officers with Overdue > 0 AND always keep the Unassigned bar at the bottom
+    chart_source_df = summary_df[
+        (summary_df["overdue_works"] > 0) | summary_df["_is_unassigned"]
+    ].copy()
+else:
+    chart_source_df = summary_df.copy()
 
 if chart_source_df.empty:
     st.info("No officers match the current filter.")
 else:
+    # Reversing puts index 0 at the TOP and the last row (Unassigned) at the BOTTOM
     plot_df = chart_source_df.iloc[::-1].copy()
     plot_df["y_short"] = plot_df[view_choice].map(lambda s: shorten_label(s, 28))
 
@@ -963,7 +1139,7 @@ else:
             x=0,
             traceorder="reversed",
         ),
-        margin=dict(l=210, r=40, t=40, b=40),
+        margin=dict(l=230, r=40, t=40, b=40),
     )
 
     st.plotly_chart(fig, use_container_width=True)
@@ -1022,7 +1198,7 @@ officer_stats_map = {
 }
 
 selected_officer = st.selectbox(
-    f"Select {view_choice} to view and download all their Overdue Works across all worksheets:",
+    f"Select {view_choice} (including Unassigned at the bottom) to view and download their Overdue Works:",
     options=officer_options,
     index=0 if officer_options else None,
     format_func=lambda name: (
@@ -1067,9 +1243,13 @@ if selected_officer:
                 f"**Worksheets:** `{', '.join(sheets_involved)}`"
             )
 
-            safe_name = re.sub(r"[^\w\-]+", "_", selected_officer).strip("_") or "Officer"
+            safe_name = (
+                re.sub(r"[^\w\-]+", "_", selected_officer).strip("_") or "Unassigned"
+            )
             excel_bytes = convert_df_to_excel_bytes(officer_overdue_df.reset_index())
-            csv_bytes = officer_overdue_df.reset_index().to_csv(index=False).encode("utf-8-sig")
+            csv_bytes = (
+                officer_overdue_df.reset_index().to_csv(index=False).encode("utf-8-sig")
+            )
 
             dl_col1, dl_col2, _ = st.columns([1.5, 1.5, 5])
             with dl_col1:
