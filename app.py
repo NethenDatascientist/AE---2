@@ -46,6 +46,11 @@ st.markdown(
             gap: 0.55rem !important;
             padding-top: 0.25rem !important;
         }
+        /* Tighten the vertical gap around dividers and below KPI metrics */
+        hr {
+            margin-top: 0.35rem !important;
+            margin-bottom: 0.45rem !important;
+        }
     </style>
     """,
     unsafe_allow_html=True,
@@ -90,9 +95,9 @@ COL_STATUS_STD = "CP/CF/P/TBS/TP/ETS/OTH"
 ALL_DIVISIONS_OPTION = "ALL (ಎಲ್ಲಾ ವಿಭಾಗಗಳು)"
 UNASSIGNED_LABEL = "ಹೆಸರು ನಮೂದಿಸಿಲ್ಲ / Unassigned (Empty)"
 
-# Threshold above which long bars are visually compressed so normal bars stay wide
-BAR_SHRINK_THRESHOLD = 300
-BAR_SHRINK_FACTOR = 0.12  # Portion above 300 is scaled at 12% so it still looks > 300
+# Shrink bars above 250 works so normal bars stretch wide across the chart
+BAR_SHRINK_THRESHOLD = 250
+BAR_SHRINK_MAX_EXTRA = 38.0  # Caps compressed excess so even 500+ or 2000+ bars stay near ~285
 
 DEFAULT_SHEET_URL = st.secrets.get(
     "SHEET_URL",
@@ -133,13 +138,16 @@ def get_shared_state_v8() -> dict:
 # -----------------------------------------------------------------------------
 def compress_bar_length(val: float, threshold: int = BAR_SHRINK_THRESHOLD) -> float:
     """
-    Keep values <= 300 at 1:1 scale.
-    For values > 300, shrink the excess portion so the bar still appears longer
-    than 300 without squishing all other bars in the chart.
+    Keep values <= 250 at full 1:1 scale.
+    For values > 250, smoothly compress the excess into a tight 250..288 band
+    so 250+ bars still look longer than other bars without creating a huge gap on the right.
     """
-    if val <= threshold:
-        return float(val)
-    return float(threshold) + (float(val) - float(threshold)) * BAR_SHRINK_FACTOR
+    v = float(val)
+    t = float(threshold)
+    if v <= t:
+        return v
+    excess = v - t
+    return t + BAR_SHRINK_MAX_EXTRA * (excess / (excess + 120.0))
 
 
 def to_safe_python_date(val):
@@ -881,8 +889,7 @@ if master_df.empty:
     st.dataframe(diag_df, use_container_width=True)
     st.stop()
 
-# Vertical breathing room before the 3 control cards
-st.markdown("<div style='margin-top: 1.1rem;'></div>", unsafe_allow_html=True)
+st.markdown("<div style='margin-top: 0.9rem;'></div>", unsafe_allow_html=True)
 
 # -----------------------------------------------------------------------------
 # TOP CONTROLS: SPACED OUT IN 3 BORDERED CARDS WITH LARGE GAPS
@@ -921,8 +928,7 @@ with ctrl_col3:
             horizontal=False,
         )
 
-# Vertical breathing room between the 3 control cards and the KPI metrics row
-st.markdown("<div style='margin-top: 1.3rem;'></div>", unsafe_allow_html=True)
+st.markdown("<div style='margin-top: 0.6rem;'></div>", unsafe_allow_html=True)
 
 st.sidebar.markdown(f"**Active {COL_DIV}:** `{selected_division}`")
 
@@ -985,7 +991,7 @@ else:
     ).reset_index(drop=True)
 
 # -----------------------------------------------------------------------------
-# KPI SUMMARY METRICS (FILTERED BY ವಿಭಾಗ)
+# KPI SUMMARY METRICS (5 COLUMNS — NO ವಿಭಾಗ CARD, REDUCED BOTTOM GAP)
 # -----------------------------------------------------------------------------
 total_assigned_all = int(summary_df["total_works"].sum())
 total_overdue_all = int(summary_df["overdue_works"].sum())
@@ -1007,27 +1013,24 @@ div_badge = (
     else selected_division
 )
 
-k1, k2, k3, k4, k5, k6 = st.columns(
-    [1.05, 1.35, 1.0, 1.0, 1.3, 0.9], gap="medium"
-)
+k1, k2, k3, k4, k5 = st.columns([1.15, 1.0, 1.05, 1.35, 1.0], gap="medium")
 k1.metric("📅 Date (Today)", today_str)
-k2.metric(f"🏛️ {COL_DIV}", div_badge)
-k3.metric(
+k2.metric(
     "👥 Officers",
     f"{named_officers_count:,}",
     help=f"Officers in {view_choice} (plus {unassigned_works_count:,} unassigned works).",
 )
-k4.metric("📋 Total Works", f"{total_assigned_all:,}")
-k5.metric(
+k3.metric("📋 Total Works", f"{total_assigned_all:,}")
+k4.metric(
     "🔴 Overdue Works ('P')",
     f"{total_overdue_all:,} ({overall_overdue_pct}%)",
 )
-k6.metric("🟢 'ETS' Works", f"{total_ets_all:,}")
+k5.metric("🟢 'ETS' Works", f"{total_ets_all:,}")
 
 st.divider()
 
 # -----------------------------------------------------------------------------
-# HORIZONTAL BAR CHART (WITH >300 OUTLIER BAR SHRINKING & NOTICE)
+# HORIZONTAL BAR CHART (SHRUNK ABOVE 250 WORKS, NO YELLOW LINE OR BLUE NOTICE)
 # -----------------------------------------------------------------------------
 st.subheader(
     f"📈 Overdue & ETS Works by {view_choice} — [{COL_DIV}: {div_badge}] ({sort_choice})"
@@ -1049,26 +1052,9 @@ else:
         plot_df["total_works"] > BAR_SHRINK_THRESHOLD
     )
 
-    shrunk_officers = (
-        chart_source_df.loc[
-            chart_source_df["total_works"] > BAR_SHRINK_THRESHOLD, view_choice
-        ].tolist()
-        if shrink_outliers
-        else []
-    )
-
-    if shrunk_officers and chart_style == "Overlay (Overdue + ETS + Rest of Works)":
-        st.info(
-            f"📐 **Note on Bar Scaling (> {BAR_SHRINK_THRESHOLD} Works):** "
-            f"**{len(shrunk_officers)}** bar(s) exceeding **{BAR_SHRINK_THRESHOLD} works** "
-            f"({', '.join(f'`{n}`' for n in shrunk_officers)}) have been visually compressed "
-            f"beyond the **{BAR_SHRINK_THRESHOLD}** mark (marked with **`✂️ [Bar Shrunk >300]`**) "
-            f"so they still appear longer than other bars while keeping all other bars wide and easy to read."
-        )
-
     def _build_bar_label(r) -> str:
         shrink_tag = (
-            "  <span style='color:#FBBF24'><b>✂️ [Bar Shrunk >300]</b></span>"
+            f"  <span style='color:#FBBF24'>[>{BAR_SHRINK_THRESHOLD} Shrunk]</span>"
             if r["is_shrunk"]
             and chart_style == "Overlay (Overdue + ETS + Rest of Works)"
             else ""
@@ -1127,7 +1113,7 @@ else:
             )
         )
         max_x = max(int(plot_df["overdue_works"].max()), 1)
-        x_range_max = max_x * 1.38
+        x_range_max = max_x * 1.24
         x_axis_title = "Number of Overdue Works"
 
     elif chart_style == "Scale by Overdue Percentage (%)":
@@ -1167,7 +1153,7 @@ else:
             )
         )
         max_x = max(float(plot_df["overdue_pct"].max()), 1.0)
-        x_range_max = max_x * 1.38
+        x_range_max = max_x * 1.24
         x_axis_title = "Overdue Percentage (%)"
 
     else:
@@ -1184,15 +1170,6 @@ else:
             plot_df["vis_overdue_plus_ets"] = plot_df["overdue_plus_ets"].astype(float)
             plot_df["vis_overdue"] = plot_df["overdue_works"].astype(float)
 
-        # Highlight border in amber when a bar has been shrunk > 300
-        rest_border_colors = [
-            "#F59E0B" if shrunk else "#64748B"
-            for shrunk in plot_df["is_shrunk"].tolist()
-        ]
-        rest_border_widths = [
-            1.8 if shrunk else 1.0 for shrunk in plot_df["is_shrunk"].tolist()
-        ]
-
         fig.add_trace(
             go.Bar(
                 y=plot_df[view_choice],
@@ -1201,7 +1178,7 @@ else:
                 orientation="h",
                 marker=dict(
                     color="rgba(148, 163, 184, 0.30)",
-                    line=dict(color=rest_border_colors, width=rest_border_widths),
+                    line=dict(color="#64748B", width=1),
                 ),
                 text=plot_df["bar_label"],
                 textposition="outside",
@@ -1288,25 +1265,16 @@ else:
             )
         )
 
-        # Draw a vertical dashed line at 300 if any bar was shrunk above 300
-        if shrunk_officers:
-            fig.add_vline(
-                x=BAR_SHRINK_THRESHOLD,
-                line_width=1.5,
-                line_dash="dash",
-                line_color="#F59E0B",
-                annotation_text=f"✂️ {BAR_SHRINK_THRESHOLD}+ Works Scale Compressed",
-                annotation_position="top left",
-                annotation_font=dict(color="#FBBF24", size=12),
-            )
-
-        max_x = max(float(plot_df["vis_total"].max()), 1.0)
-        x_range_max = max_x * 1.42
-        x_axis_title = (
-            f"Number of Works (1:1 up to {BAR_SHRINK_THRESHOLD}; compressed above {BAR_SHRINK_THRESHOLD})"
-            if shrunk_officers
-            else "Number of Works"
+        # Scale X-axis tightly to named officers (ignoring huge Unassigned row if > 250)
+        named_vis = plot_df.loc[~plot_df["_is_unassigned"], "vis_total"]
+        base_max_x = (
+            float(named_vis.max())
+            if not named_vis.empty
+            else float(plot_df["vis_total"].max())
         )
+        max_x = max(base_max_x, float(plot_df["vis_total"].max()), 1.0)
+        x_range_max = max_x * 1.22
+        x_axis_title = "Number of Works"
 
     chart_height = max(500, len(plot_df) * 36 + 90)
 
@@ -1336,7 +1304,7 @@ else:
             x=0,
             traceorder="reversed",
         ),
-        margin=dict(l=230, r=40, t=40, b=40),
+        margin=dict(l=230, r=20, t=35, b=40),
     )
 
     st.plotly_chart(fig, use_container_width=True)
