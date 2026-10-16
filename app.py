@@ -28,13 +28,23 @@ st.markdown(
     <style>
         .block-container {
             max-width: 100% !important;
-            padding-left: 1.2rem !important;
-            padding-right: 1.2rem !important;
+            padding-left: 1.5rem !important;
+            padding-right: 1.5rem !important;
             padding-top: 2.8rem !important;
             padding-bottom: 2rem !important;
         }
         [data-testid="stPlotlyChart"] {
             width: 100% !important;
+        }
+        /* Extra breathing room inside the 3 top control cards */
+        div[data-testid="stVerticalBlockBorderWrapper"] {
+            border-radius: 10px !important;
+            padding: 0.35rem 0.5rem !important;
+            background-color: rgba(148, 163, 184, 0.05);
+        }
+        div[role="radiogroup"] {
+            gap: 0.55rem !important;
+            padding-top: 0.25rem !important;
         }
     </style>
     """,
@@ -80,6 +90,10 @@ COL_STATUS_STD = "CP/CF/P/TBS/TP/ETS/OTH"
 ALL_DIVISIONS_OPTION = "ALL (ಎಲ್ಲಾ ವಿಭಾಗಗಳು)"
 UNASSIGNED_LABEL = "ಹೆಸರು ನಮೂದಿಸಿಲ್ಲ / Unassigned (Empty)"
 
+# Threshold above which long bars are visually compressed so normal bars stay wide
+BAR_SHRINK_THRESHOLD = 300
+BAR_SHRINK_FACTOR = 0.12  # Portion above 300 is scaled at 12% so it still looks > 300
+
 DEFAULT_SHEET_URL = st.secrets.get(
     "SHEET_URL",
     "https://docs.google.com/spreadsheets/d/13W04z-fdU3RhuVJ5vQFRpK4BBSQRJWfscPqpr7Oj2Y8/edit?gid=1055199869#gid=1055199869",
@@ -117,6 +131,17 @@ def get_shared_state_v8() -> dict:
 # -----------------------------------------------------------------------------
 # HELPER FUNCTIONS
 # -----------------------------------------------------------------------------
+def compress_bar_length(val: float, threshold: int = BAR_SHRINK_THRESHOLD) -> float:
+    """
+    Keep values <= 300 at 1:1 scale.
+    For values > 300, shrink the excess portion so the bar still appears longer
+    than 300 without squishing all other bars in the chart.
+    """
+    if val <= threshold:
+        return float(val)
+    return float(threshold) + (float(val) - float(threshold)) * BAR_SHRINK_FACTOR
+
+
 def to_safe_python_date(val):
     """
     Convert any datetime/Timestamp/date object into a plain Python datetime.date.
@@ -254,14 +279,12 @@ def find_matching_column_indices(headers: list[str]) -> dict:
     """
     col_idx_map = {}
 
-    # Pass 1: Look for exact "ವಿಭಾಗ" match first so it is never confused with "ಉಪ ವಿಭಾಗ"
     for idx, col in enumerate(headers):
         norm_col = normalize_text(col)
         if norm_col in {"ವಿಭಾಗ", "ವಿಭಾಗದ ಹೆಸರು"} and "division" not in col_idx_map:
             col_idx_map["division"] = idx
             break
 
-    # Pass 2: Match remaining columns (and fallback for "ವಿಭಾಗ" excluding "ಉಪ")
     for idx, col in enumerate(headers):
         norm_col = normalize_text(col)
         upper_col = norm_col.upper()
@@ -326,9 +349,7 @@ def build_clean_unique_headers(raw_headers: list[str], col_idx_map: dict) -> lis
 
 
 def parse_indian_date_list(series: pd.Series) -> list:
-    """
-    Parse dates into a list of plain Python `datetime.date` objects (or `None`).
-    """
+    """Parse dates into a list of plain Python `datetime.date` objects (or `None`)."""
     parsed_dates = []
     for raw_val in series.tolist():
         val = to_safe_python_date(raw_val)
@@ -392,18 +413,14 @@ def is_valid_division_text(val: str) -> bool:
     """
     Row inclusion rule:
     Consider a row if and only if it has a valid text value in the 'ವಿಭಾಗ' column.
-    Excludes blank cells, pure numbers/symbols (e.g. '1', '2', '-'), repeated header
-    text ('ವಿಭಾಗ'), and 'ಒಟ್ಟು' / 'Total' summary rows.
     """
     if not val:
         return False
     upper = val.upper().strip()
     if upper in {"-", "--", "---", "NIL", "NA", "N/A", "NONE", "NAN", "NAT", "NULL", "0"}:
         return False
-    # Exclude cells that contain only digits/punctuation/symbols and no text letters
     if re.fullmatch(r"[\d\W_]+", val):
         return False
-    # Exclude repeated header row or summary/total labels
     if val in {COL_DIV, "ವಿಭಾಗದ ಹೆಸರು", "ಒಟ್ಟು", "ಒಟ್ಟು ಮೊತ್ತ", "ಮಹಾ ಒಟ್ಟು"}:
         return False
     if upper in {"DIVISION", "DIVISION NAME", "TOTAL", "GRAND TOTAL", "SUB TOTAL"}:
@@ -414,10 +431,7 @@ def is_valid_division_text(val: str) -> bool:
 
 
 def map_officer_or_unassigned(name: str) -> str:
-    """
-    Map blank or placeholder officer cells to UNASSIGNED_LABEL so works with a valid
-    'ವಿಭಾಗ' but empty officer name are still counted under the Unassigned bar at the bottom.
-    """
+    """Map blank or placeholder officer cells to UNASSIGNED_LABEL."""
     if not name:
         return UNASSIGNED_LABEL
     upper = name.upper()
@@ -562,7 +576,6 @@ def parse_xlsx_workbook(workbook_bytes: bytes):
                     raw_headers = combined_headers
                     col_idx_map = alt_map
 
-            # Also check 1 row above header_idx in case "ವಿಭಾಗ" was on the top merged row
             if ("division" not in col_idx_map) and (header_idx > 0):
                 prev_row = [
                     normalize_text(col) for col in raw_df.iloc[header_idx - 1].tolist()
@@ -632,10 +645,8 @@ def parse_xlsx_workbook(workbook_bytes: bytes):
                 dtype=bool,
             )
 
-            # Overdue Logic: Status is 'P'/'p', target date < Today, actual completion date is empty
             is_overdue = is_status_p & target_is_before_today & actual_empty
 
-            # Row Inclusion Logic: Row is considered ONLY if 'ವಿಭಾಗ' column has a valid text value
             valid_row_mask = s_div_raw.map(is_valid_division_text)
 
             s_so_mapped = s_so_raw.map(map_officer_or_unassigned)
@@ -790,6 +801,12 @@ chart_style = st.sidebar.radio(
     help="Choose how the horizontal bars are scaled across the page.",
 )
 
+shrink_outliers = st.sidebar.checkbox(
+    f"Shrink long bars above {BAR_SHRINK_THRESHOLD} works",
+    value=True,
+    help=f"Compresses bars above {BAR_SHRINK_THRESHOLD} works so all other bars look long and readable.",
+)
+
 hide_zero_overdue = st.sidebar.checkbox(
     "Show only officers with Overdue > 0",
     value=False,
@@ -864,41 +881,49 @@ if master_df.empty:
     st.dataframe(diag_df, use_container_width=True)
     st.stop()
 
+# Vertical breathing room before the 3 control cards
+st.markdown("<div style='margin-top: 1.1rem;'></div>", unsafe_allow_html=True)
+
 # -----------------------------------------------------------------------------
-# TOP CONTROLS: ವಿಭಾಗ DROPDOWN, OFFICER VIEW, & SORT ORDER
+# TOP CONTROLS: SPACED OUT IN 3 BORDERED CARDS WITH LARGE GAPS
 # -----------------------------------------------------------------------------
 unique_divisions = sorted(
     [d for d in master_df["division_name"].dropna().unique().tolist() if d != ""]
 )
 division_options = [ALL_DIVISIONS_OPTION] + unique_divisions
 
-ctrl_col1, ctrl_col2, ctrl_col3 = st.columns([1.3, 1.3, 1.4])
+ctrl_col1, ctrl_col2, ctrl_col3 = st.columns([1.25, 1.35, 1.4], gap="large")
 
 with ctrl_col1:
-    selected_division = st.selectbox(
-        f"🏛️ {COL_DIV} ಆಯ್ಕೆಮಾಡಿ / Select {COL_DIV} (Applies to All Values):",
-        options=division_options,
-        index=0,
-    )
+    with st.container(border=True):
+        selected_division = st.selectbox(
+            f"🏛️ {COL_DIV} ಆಯ್ಕೆಮಾಡಿ / Select {COL_DIV} (Applies to All Values):",
+            options=division_options,
+            index=0,
+        )
 
 with ctrl_col2:
-    view_choice = st.radio(
-        "👤 ವೀಕ್ಷಣೆ ಆಯ್ಕೆಮಾಡಿ / Select Officer View:",
-        options=[COL_SO, COL_AEE],
-        horizontal=True,
-    )
+    with st.container(border=True):
+        view_choice = st.radio(
+            "👤 ವೀಕ್ಷಣೆ ಆಯ್ಕೆಮಾಡಿ / Select Officer View:",
+            options=[COL_SO, COL_AEE],
+            horizontal=False,
+        )
 
 with ctrl_col3:
-    sort_choice = st.radio(
-        "⬇️ ಕ್ರಮಬದ್ಧಗೊಳಿಸಿ / Sort Chart & Table By:",
-        options=[
-            "Highest Overdue Count at Top",
-            "Highest Overdue Percentage (%) at Top",
-        ],
-        horizontal=True,
-    )
+    with st.container(border=True):
+        sort_choice = st.radio(
+            "⬇️ ಕ್ರಮಬದ್ಧಗೊಳಿಸಿ / Sort Chart & Table By:",
+            options=[
+                "Highest Overdue Count at Top",
+                "Highest Overdue Percentage (%) at Top",
+            ],
+            horizontal=False,
+        )
 
-# Also show active division in the sidebar
+# Vertical breathing room between the 3 control cards and the KPI metrics row
+st.markdown("<div style='margin-top: 1.3rem;'></div>", unsafe_allow_html=True)
+
 st.sidebar.markdown(f"**Active {COL_DIV}:** `{selected_division}`")
 
 group_col = "so_name" if view_choice == COL_SO else "aee_name"
@@ -982,13 +1007,15 @@ div_badge = (
     else selected_division
 )
 
-k1, k2, k3, k4, k5, k6 = st.columns(6)
+k1, k2, k3, k4, k5, k6 = st.columns(
+    [1.05, 1.35, 1.0, 1.0, 1.3, 0.9], gap="medium"
+)
 k1.metric("📅 Date (Today)", today_str)
 k2.metric(f"🏛️ {COL_DIV}", div_badge)
 k3.metric(
-    f"👥 Officers ({view_choice})",
+    "👥 Officers",
     f"{named_officers_count:,}",
-    help=f"Plus {unassigned_works_count:,} works where {view_choice} is empty.",
+    help=f"Officers in {view_choice} (plus {unassigned_works_count:,} unassigned works).",
 )
 k4.metric("📋 Total Works", f"{total_assigned_all:,}")
 k5.metric(
@@ -1000,7 +1027,7 @@ k6.metric("🟢 'ETS' Works", f"{total_ets_all:,}")
 st.divider()
 
 # -----------------------------------------------------------------------------
-# HORIZONTAL BAR CHART (FILTERED BY ವಿಭಾಗ, UNASSIGNED PINNED AT BOTTOM)
+# HORIZONTAL BAR CHART (WITH >300 OUTLIER BAR SHRINKING & NOTICE)
 # -----------------------------------------------------------------------------
 st.subheader(
     f"📈 Overdue & ETS Works by {view_choice} — [{COL_DIV}: {div_badge}] ({sort_choice})"
@@ -1018,24 +1045,48 @@ if chart_source_df.empty:
 else:
     plot_df = chart_source_df.iloc[::-1].copy()
     plot_df["y_short"] = plot_df[view_choice].map(lambda s: shorten_label(s, 28))
+    plot_df["is_shrunk"] = shrink_outliers & (
+        plot_df["total_works"] > BAR_SHRINK_THRESHOLD
+    )
 
-    if sort_choice == "Highest Overdue Percentage (%) at Top":
-        plot_df["bar_label"] = plot_df.apply(
-            lambda r: (
+    shrunk_officers = (
+        chart_source_df.loc[
+            chart_source_df["total_works"] > BAR_SHRINK_THRESHOLD, view_choice
+        ].tolist()
+        if shrink_outliers
+        else []
+    )
+
+    if shrunk_officers and chart_style == "Overlay (Overdue + ETS + Rest of Works)":
+        st.info(
+            f"📐 **Note on Bar Scaling (> {BAR_SHRINK_THRESHOLD} Works):** "
+            f"**{len(shrunk_officers)}** bar(s) exceeding **{BAR_SHRINK_THRESHOLD} works** "
+            f"({', '.join(f'`{n}`' for n in shrunk_officers)}) have been visually compressed "
+            f"beyond the **{BAR_SHRINK_THRESHOLD}** mark (marked with **`✂️ [Bar Shrunk >300]`**) "
+            f"so they still appear longer than other bars while keeping all other bars wide and easy to read."
+        )
+
+    def _build_bar_label(r) -> str:
+        shrink_tag = (
+            "  <span style='color:#FBBF24'><b>✂️ [Bar Shrunk >300]</b></span>"
+            if r["is_shrunk"]
+            and chart_style == "Overlay (Overdue + ETS + Rest of Works)"
+            else ""
+        )
+        if sort_choice == "Highest Overdue Percentage (%) at Top":
+            return (
                 f"  <b>{r['overdue_pct']:.1f}% Overdue</b> "
-                f"({int(r['overdue_works'])} Overdue | {int(r['ets_works'])} ETS / {int(r['total_works'])} Total)"
-            ),
-            axis=1,
-        )
-    else:
-        plot_df["bar_label"] = plot_df.apply(
-            lambda r: (
-                f"  <b>{int(r['overdue_works'])} Overdue</b> | "
+                f"({int(r['overdue_works'])} Overdue | "
                 f"<span style='color:#4ADE80'>{int(r['ets_works'])} ETS</span> / "
-                f"{int(r['total_works'])} Total ({r['overdue_pct']:.1f}%)"
-            ),
-            axis=1,
+                f"{int(r['total_works'])} Total){shrink_tag}"
+            )
+        return (
+            f"  <b>{int(r['overdue_works'])} Overdue</b> | "
+            f"<span style='color:#4ADE80'>{int(r['ets_works'])} ETS</span> / "
+            f"{int(r['total_works'])} Total ({r['overdue_pct']:.1f}%){shrink_tag}"
         )
+
+    plot_df["bar_label"] = plot_df.apply(_build_bar_label, axis=1)
 
     fig = go.Figure()
 
@@ -1076,7 +1127,7 @@ else:
             )
         )
         max_x = max(int(plot_df["overdue_works"].max()), 1)
-        x_range_max = max_x * 1.34
+        x_range_max = max_x * 1.38
         x_axis_title = "Number of Overdue Works"
 
     elif chart_style == "Scale by Overdue Percentage (%)":
@@ -1116,21 +1167,41 @@ else:
             )
         )
         max_x = max(float(plot_df["overdue_pct"].max()), 1.0)
-        x_range_max = max_x * 1.34
+        x_range_max = max_x * 1.38
         x_axis_title = "Overdue Percentage (%)"
 
     else:
         plot_df["overdue_plus_ets"] = plot_df["overdue_works"] + plot_df["ets_works"]
 
+        if shrink_outliers:
+            plot_df["vis_total"] = plot_df["total_works"].map(compress_bar_length)
+            plot_df["vis_overdue_plus_ets"] = plot_df["overdue_plus_ets"].map(
+                compress_bar_length
+            )
+            plot_df["vis_overdue"] = plot_df["overdue_works"].map(compress_bar_length)
+        else:
+            plot_df["vis_total"] = plot_df["total_works"].astype(float)
+            plot_df["vis_overdue_plus_ets"] = plot_df["overdue_plus_ets"].astype(float)
+            plot_df["vis_overdue"] = plot_df["overdue_works"].astype(float)
+
+        # Highlight border in amber when a bar has been shrunk > 300
+        rest_border_colors = [
+            "#F59E0B" if shrunk else "#64748B"
+            for shrunk in plot_df["is_shrunk"].tolist()
+        ]
+        rest_border_widths = [
+            1.8 if shrunk else 1.0 for shrunk in plot_df["is_shrunk"].tolist()
+        ]
+
         fig.add_trace(
             go.Bar(
                 y=plot_df[view_choice],
-                x=plot_df["total_works"],
+                x=plot_df["vis_total"],
                 name="Rest of Works (Other Statuses)",
                 orientation="h",
                 marker=dict(
                     color="rgba(148, 163, 184, 0.30)",
-                    line=dict(color="#64748B", width=1),
+                    line=dict(color=rest_border_colors, width=rest_border_widths),
                 ),
                 text=plot_df["bar_label"],
                 textposition="outside",
@@ -1149,7 +1220,7 @@ else:
                 hovertemplate=(
                     f"<b>{view_choice}:</b> %{{customdata[0]}}<br>"
                     f"<b>{COL_DIV}:</b> {div_badge}<br>"
-                    "<b>Total Works Assigned:</b> %{customdata[1]}<br>"
+                    "<b>Total Works Assigned (Actual):</b> %{customdata[1]}<br>"
                     "<b>Overdue Works ('P'):</b> %{customdata[2]}<br>"
                     "<b>ETS Works ('ETS'):</b> %{customdata[3]}<br>"
                     "<b>Rest of Works:</b> %{customdata[4]}<br>"
@@ -1161,7 +1232,7 @@ else:
         fig.add_trace(
             go.Bar(
                 y=plot_df[view_choice],
-                x=plot_df["overdue_plus_ets"],
+                x=plot_df["vis_overdue_plus_ets"],
                 name="ETS Works ('ETS')",
                 orientation="h",
                 marker=dict(color="#4ADE80"),
@@ -1181,7 +1252,7 @@ else:
                     "<b>ETS Works ('ETS'):</b> %{customdata[3]}<br>"
                     "<b>Overdue Works ('P'):</b> %{customdata[2]}<br>"
                     "<b>Rest of Works:</b> %{customdata[4]}<br>"
-                    "<b>Total Works Assigned:</b> %{customdata[1]}<br>"
+                    "<b>Total Works Assigned (Actual):</b> %{customdata[1]}<br>"
                     "<b>Overdue Percentage:</b> %{customdata[5]:.1f}%<extra></extra>"
                 ),
             )
@@ -1190,7 +1261,7 @@ else:
         fig.add_trace(
             go.Bar(
                 y=plot_df[view_choice],
-                x=plot_df["overdue_works"],
+                x=plot_df["vis_overdue"],
                 name="Overdue Works ('P')",
                 orientation="h",
                 marker=dict(color="#EF4444"),
@@ -1202,23 +1273,40 @@ else:
                         "overdue_pct",
                         "ets_works",
                         "rest_works",
+                        "overdue_works",
                     ]
                 ],
                 hovertemplate=(
                     f"<b>{view_choice}:</b> %{{customdata[0]}}<br>"
                     f"<b>{COL_DIV}:</b> {div_badge}<br>"
-                    "<b>Overdue Works ('P'):</b> %{x}<br>"
+                    "<b>Overdue Works ('P'):</b> %{customdata[6]}<br>"
                     "<b>ETS Works ('ETS'):</b> %{customdata[4]}<br>"
                     "<b>Rest of Works:</b> %{customdata[5]}<br>"
-                    "<b>Total Works Assigned:</b> %{customdata[1]}<br>"
+                    "<b>Total Works Assigned (Actual):</b> %{customdata[1]}<br>"
                     "<b>Overdue Percentage:</b> %{customdata[3]:.1f}%<extra></extra>"
                 ),
             )
         )
 
-        max_x = max(int(plot_df["total_works"].max()), 1)
-        x_range_max = max_x * 1.36
-        x_axis_title = "Number of Works"
+        # Draw a vertical dashed line at 300 if any bar was shrunk above 300
+        if shrunk_officers:
+            fig.add_vline(
+                x=BAR_SHRINK_THRESHOLD,
+                line_width=1.5,
+                line_dash="dash",
+                line_color="#F59E0B",
+                annotation_text=f"✂️ {BAR_SHRINK_THRESHOLD}+ Works Scale Compressed",
+                annotation_position="top left",
+                annotation_font=dict(color="#FBBF24", size=12),
+            )
+
+        max_x = max(float(plot_df["vis_total"].max()), 1.0)
+        x_range_max = max_x * 1.42
+        x_axis_title = (
+            f"Number of Works (1:1 up to {BAR_SHRINK_THRESHOLD}; compressed above {BAR_SHRINK_THRESHOLD})"
+            if shrunk_officers
+            else "Number of Works"
+        )
 
     chart_height = max(500, len(plot_df) * 36 + 90)
 
@@ -1325,7 +1413,6 @@ if selected_officer:
             overdue_full_df[full_filter_col] == selected_officer
         ].copy()
 
-        # Apply the active ವಿಭಾಗ filter to the bottom drill-down table as well
         if selected_division != ALL_DIVISIONS_OPTION:
             officer_overdue_df = officer_overdue_df[
                 officer_overdue_df["_division_name"] == selected_division
