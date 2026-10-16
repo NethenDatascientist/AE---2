@@ -95,9 +95,9 @@ COL_STATUS_STD = "CP/CF/P/TBS/TP/ETS/OTH"
 ALL_DIVISIONS_OPTION = "ALL (ಎಲ್ಲಾ ವಿಭಾಗಗಳು)"
 UNASSIGNED_LABEL = "ಹೆಸರು ನಮೂದಿಸಿಲ್ಲ / Unassigned (Empty)"
 
-# Shrink bars above 250 works so normal bars stretch wide across the chart
+# Shrink bars above 250 works so normal bars stay wide and full labels never clip
 BAR_SHRINK_THRESHOLD = 250
-BAR_SHRINK_MAX_EXTRA = 38.0  # Caps compressed excess so even 500+ or 2000+ bars stay near ~285
+BAR_SHRINK_MAX_EXTRA = 24.0  # Caps compressed excess so 500+ bars sit around ~268 visual units
 
 DEFAULT_SHEET_URL = st.secrets.get(
     "SHEET_URL",
@@ -139,8 +139,8 @@ def get_shared_state_v8() -> dict:
 def compress_bar_length(val: float, threshold: int = BAR_SHRINK_THRESHOLD) -> float:
     """
     Keep values <= 250 at full 1:1 scale.
-    For values > 250, smoothly compress the excess into a tight 250..288 band
-    so 250+ bars still look longer than other bars without creating a huge gap on the right.
+    For values > 250, smoothly compress the excess into a tight 250..274 band
+    so 250+ bars still look longer than other bars while leaving full room for text labels.
     """
     v = float(val)
     t = float(threshold)
@@ -1030,7 +1030,7 @@ k5.metric("🟢 'ETS' Works", f"{total_ets_all:,}")
 st.divider()
 
 # -----------------------------------------------------------------------------
-# HORIZONTAL BAR CHART (SHRUNK ABOVE 250 WORKS, NO YELLOW LINE OR BLUE NOTICE)
+# HORIZONTAL BAR CHART (ALL LABELS 100% VISIBLE ON SCREEN)
 # -----------------------------------------------------------------------------
 st.subheader(
     f"📈 Overdue & ETS Works by {view_choice} — [{COL_DIV}: {div_badge}] ({sort_choice})"
@@ -1054,7 +1054,7 @@ else:
 
     def _build_bar_label(r) -> str:
         shrink_tag = (
-            f"  <span style='color:#FBBF24'>[>{BAR_SHRINK_THRESHOLD} Shrunk]</span>"
+            f" <span style='color:#FBBF24'>[>{BAR_SHRINK_THRESHOLD} Shrunk]</span>"
             if r["is_shrunk"]
             and chart_style == "Overlay (Overdue + ETS + Rest of Works)"
             else ""
@@ -1113,7 +1113,7 @@ else:
             )
         )
         max_x = max(int(plot_df["overdue_works"].max()), 1)
-        x_range_max = max_x * 1.24
+        x_range_max = max_x * 1.38
         x_axis_title = "Number of Overdue Works"
 
     elif chart_style == "Scale by Overdue Percentage (%)":
@@ -1153,7 +1153,7 @@ else:
             )
         )
         max_x = max(float(plot_df["overdue_pct"].max()), 1.0)
-        x_range_max = max_x * 1.24
+        x_range_max = max_x * 1.38
         x_axis_title = "Overdue Percentage (%)"
 
     else:
@@ -1265,15 +1265,9 @@ else:
             )
         )
 
-        # Scale X-axis tightly to named officers (ignoring huge Unassigned row if > 250)
-        named_vis = plot_df.loc[~plot_df["_is_unassigned"], "vis_total"]
-        base_max_x = (
-            float(named_vis.max())
-            if not named_vis.empty
-            else float(plot_df["vis_total"].max())
-        )
-        max_x = max(base_max_x, float(plot_df["vis_total"].max()), 1.0)
-        x_range_max = max_x * 1.22
+        # Ensure full text labels on the longest bar never clip at the right edge
+        max_x = max(float(plot_df["vis_total"].max()), 1.0)
+        x_range_max = max_x * 1.38
         x_axis_title = "Number of Works"
 
     chart_height = max(500, len(plot_df) * 36 + 90)
@@ -1304,7 +1298,7 @@ else:
             x=0,
             traceorder="reversed",
         ),
-        margin=dict(l=230, r=20, t=35, b=40),
+        margin=dict(l=225, r=50, t=35, b=40),
     )
 
     st.plotly_chart(fig, use_container_width=True)
