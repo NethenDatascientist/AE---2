@@ -95,24 +95,24 @@ COL_STATUS_STD = "CP/CF/P/TBS/TP/ETS/OTH"
 ALL_DIVISIONS_OPTION = "ALL (ಎಲ್ಲಾ ವಿಭಾಗಗಳು)"
 UNASSIGNED_LABEL = "ಹೆಸರು ನಮೂದಿಸಿಲ್ಲ / Unassigned (Empty)"
 
-# Shrink bars above 250 works so normal bars stay wide and full labels never clip
+# Shrink threshold for Section Officer view (>250 works)
 BAR_SHRINK_THRESHOLD = 250
-BAR_SHRINK_MAX_EXTRA = 24.0  # Caps compressed excess so 500+ bars sit around ~268 visual units
+BAR_SHRINK_MAX_EXTRA = 24.0
 
 DEFAULT_SHEET_URL = st.secrets.get(
     "SHEET_URL",
     "https://docs.google.com/spreadsheets/d/13W04z-fdU3RhuVJ5vQFRpK4BBSQRJWfscPqpr7Oj2Y8/edit?gid=1055199869#gid=1055199869",
 )
 
-SCHEMA_VERSION = "v8_vibhaga_logic"
-DISK_BACKUP_FILE = "/tmp/mi_overdue_shared_snapshot_v8.pkl"
+SCHEMA_VERSION = "v9_conditional_shrinking"
+DISK_BACKUP_FILE = "/tmp/mi_overdue_shared_snapshot_v9.pkl"
 
 
 # -----------------------------------------------------------------------------
 # SHARED SERVER MEMORY & LOCK
 # -----------------------------------------------------------------------------
 @st.cache_resource
-def get_shared_state_v8() -> dict:
+def get_shared_state_v9() -> dict:
     state = {
         "version": SCHEMA_VERSION,
         "lock": threading.Lock(),
@@ -137,11 +137,6 @@ def get_shared_state_v8() -> dict:
 # HELPER FUNCTIONS
 # -----------------------------------------------------------------------------
 def compress_bar_length(val: float, threshold: int = BAR_SHRINK_THRESHOLD) -> float:
-    """
-    Keep values <= 250 at full 1:1 scale.
-    For values > 250, smoothly compress the excess into a tight 250..274 band
-    so 250+ bars still look longer than other bars while leaving full room for text labels.
-    """
     v = float(val)
     t = float(threshold)
     if v <= t:
@@ -151,10 +146,6 @@ def compress_bar_length(val: float, threshold: int = BAR_SHRINK_THRESHOLD) -> fl
 
 
 def to_safe_python_date(val):
-    """
-    Convert any datetime/Timestamp/date object into a plain Python datetime.date.
-    Supports years 0001 to 9999 and avoids Pandas nanosecond overflow & timezone errors.
-    """
     if val is None:
         return None
     if isinstance(val, pd.Timestamp):
@@ -167,7 +158,6 @@ def to_safe_python_date(val):
 
 
 def sanitize_dataframe_cells(df: pd.DataFrame) -> pd.DataFrame:
-    """Convert all datetime objects to plain Python date objects across the DataFrame."""
     cleaned_rows = [
         [to_safe_python_date(cell) for cell in row]
         for row in df.to_numpy().tolist()
@@ -178,10 +168,6 @@ def sanitize_dataframe_cells(df: pd.DataFrame) -> pd.DataFrame:
 def read_sheet_safely(
     excel_file: pd.ExcelFile, workbook_bytes: bytes, sheet_name: str
 ) -> pd.DataFrame:
-    """
-    Read a worksheet safely. Falls back to direct openpyxl reading if pd.read_excel
-    encounters out-of-bounds dates or mixed timezones.
-    """
     try:
         raw_df = pd.read_excel(
             excel_file, sheet_name=sheet_name, header=None, dtype=object
@@ -204,7 +190,6 @@ def read_sheet_safely(
 
 
 def normalize_text(val) -> str:
-    """Collapse multiple spaces/newlines and strip text."""
     val = to_safe_python_date(val)
     if val is None:
         return ""
@@ -219,7 +204,6 @@ def normalize_text(val) -> str:
 
 
 def format_cell_for_display(val) -> str:
-    """Format raw Excel cell values cleanly for table display and export."""
     val = to_safe_python_date(val)
     if val is None:
         return ""
@@ -236,15 +220,13 @@ def format_cell_for_display(val) -> str:
 
 
 def extract_spreadsheet_key(sheet_url: str) -> str:
-    """Extract the Google Spreadsheet ID from the URL."""
     match = re.search(r"/spreadsheets/d/([a-zA-Z0-9-_]+)", sheet_url)
     if not match:
-        raise ValueError("Invalid Google Sheet URL. Could not extract spreadsheet key.")
+        raise ValueError("Invalid Google Sheet URL.")
     return match.group(1)
 
 
 def download_xlsx_bytes(sheet_url: str) -> bytes:
-    """Download the Google Sheet as .xlsx with retry logic and browser headers."""
     key = extract_spreadsheet_key(sheet_url)
     urls = [
         f"https://docs.google.com/spreadsheets/d/{key}/export?format=xlsx",
@@ -276,15 +258,6 @@ def download_xlsx_bytes(sheet_url: str) -> bytes:
 
 
 def find_matching_column_indices(headers: list[str]) -> dict:
-    """
-    Find required 0-based column positions across sheets:
-    - ವಿಭಾಗ (Division, excluding ಉಪ ವಿಭಾಗ / Sub-Division)
-    - ಶಾಖಾಧಿಕಾರಿಯ ಹೆಸರು
-    - ಸಹಾಯಕ ಕಾರ್ಯಪಾಲಕ ಇಂಜಿನಿಯರ್ ಹೆಸರು
-    - ಕಾಮಗಾರಿ ಮುಕ್ತಾಯಗೊಳಿಸಬೇಕಾದ ದಿನಾಂಕ
-    - ಮುಕ್ತಾಯವಾದ ದಿನಾಂಕ
-    - Status column containing 'CP/CF'
-    """
     col_idx_map = {}
 
     for idx, col in enumerate(headers):
@@ -328,7 +301,6 @@ def find_matching_column_indices(headers: list[str]) -> dict:
 
 
 def build_clean_unique_headers(raw_headers: list[str], col_idx_map: dict) -> list[str]:
-    """Standardize key column names across sheets and deduplicate repeated headers."""
     standardized = list(raw_headers)
     if "division" in col_idx_map:
         standardized[col_idx_map["division"]] = COL_DIV
@@ -357,7 +329,6 @@ def build_clean_unique_headers(raw_headers: list[str], col_idx_map: dict) -> lis
 
 
 def parse_indian_date_list(series: pd.Series) -> list:
-    """Parse dates into a list of plain Python `datetime.date` objects (or `None`)."""
     parsed_dates = []
     for raw_val in series.tolist():
         val = to_safe_python_date(raw_val)
@@ -401,7 +372,6 @@ def parse_indian_date_list(series: pd.Series) -> list:
 
 
 def is_empty_date(series: pd.Series) -> pd.Series:
-    """Check if the 'ಮುಕ್ತಾಯವಾದ ದಿನಾಂಕ' cell is empty or placeholder text."""
     results = []
     for raw_val in series.tolist():
         val = to_safe_python_date(raw_val)
@@ -418,10 +388,6 @@ def is_empty_date(series: pd.Series) -> pd.Series:
 
 
 def is_valid_division_text(val: str) -> bool:
-    """
-    Row inclusion rule:
-    Consider a row if and only if it has a valid text value in the 'ವಿಭಾಗ' column.
-    """
     if not val:
         return False
     upper = val.upper().strip()
@@ -439,7 +405,6 @@ def is_valid_division_text(val: str) -> bool:
 
 
 def map_officer_or_unassigned(name: str) -> str:
-    """Map blank or placeholder officer cells to UNASSIGNED_LABEL."""
     if not name:
         return UNASSIGNED_LABEL
     upper = name.upper()
@@ -460,14 +425,12 @@ def map_officer_or_unassigned(name: str) -> str:
 
 
 def shorten_label(name: str, max_len: int = 28) -> str:
-    """Keep Y-axis labels compact so the chart always starts on the far left."""
     if name == UNASSIGNED_LABEL:
         return "⚠️ ಹೆಸರು ನಮೂದಿಸಿಲ್ಲ (Empty)"
     return name if len(name) <= max_len else name[: max_len - 1] + "…"
 
 
 def convert_df_to_excel_bytes(df: pd.DataFrame) -> bytes:
-    """Export a DataFrame to an in-memory .xlsx file."""
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine="openpyxl") as writer:
         df.to_excel(writer, index=False, sheet_name="Overdue_Works")
@@ -475,10 +438,6 @@ def convert_df_to_excel_bytes(df: pd.DataFrame) -> bytes:
 
 
 def parse_xlsx_workbook(workbook_bytes: bytes):
-    """
-    Parse all 23 target worksheets.
-    A row is counted if and only if the 'ವಿಭಾಗ' column contains a valid text value.
-    """
     progress = st.progress(0, text="Opening workbook...")
 
     try:
@@ -745,7 +704,6 @@ def parse_xlsx_workbook(workbook_bytes: bytes):
 
 
 def save_shared_state(state: dict, data_tuple, source_label: str):
-    """Save parsed dataset in shared RAM and on local disk."""
     now_str = datetime.now(ZoneInfo("Asia/Kolkata")).strftime("%d-%m-%Y %I:%M:%S %p")
     state["version"] = SCHEMA_VERSION
     state["data"] = data_tuple
@@ -809,12 +767,6 @@ chart_style = st.sidebar.radio(
     help="Choose how the horizontal bars are scaled across the page.",
 )
 
-shrink_outliers = st.sidebar.checkbox(
-    f"Shrink long bars above {BAR_SHRINK_THRESHOLD} works",
-    value=True,
-    help=f"Compresses bars above {BAR_SHRINK_THRESHOLD} works so all other bars look long and readable.",
-)
-
 hide_zero_overdue = st.sidebar.checkbox(
     "Show only officers with Overdue > 0",
     value=False,
@@ -831,7 +783,7 @@ show_unassigned_bar = st.sidebar.checkbox(
 # -----------------------------------------------------------------------------
 st.title("📊 Minor Irrigation — Overdue Works Dashboard")
 
-shared_state = get_shared_state_v8()
+shared_state = get_shared_state_v9()
 
 if uploaded_xlsx is not None:
     file_id = f"{uploaded_xlsx.name}_{uploaded_xlsx.size}_{SCHEMA_VERSION}"
@@ -991,7 +943,7 @@ else:
     ).reset_index(drop=True)
 
 # -----------------------------------------------------------------------------
-# KPI SUMMARY METRICS (5 COLUMNS — NO ವಿಭಾಗ CARD, REDUCED BOTTOM GAP)
+# KPI SUMMARY METRICS
 # -----------------------------------------------------------------------------
 total_assigned_all = int(summary_df["total_works"].sum())
 total_overdue_all = int(summary_df["overdue_works"].sum())
@@ -1030,7 +982,7 @@ k5.metric("🟢 'ETS' Works", f"{total_ets_all:,}")
 st.divider()
 
 # -----------------------------------------------------------------------------
-# HORIZONTAL BAR CHART (ALL LABELS 100% VISIBLE ON SCREEN)
+# HORIZONTAL BAR CHART (CONDITIONAL SHRINKING: SO = TRUE, AEE = FALSE)
 # -----------------------------------------------------------------------------
 st.subheader(
     f"📈 Overdue & ETS Works by {view_choice} — [{COL_DIV}: {div_badge}] ({sort_choice})"
@@ -1043,12 +995,18 @@ if hide_zero_overdue:
 else:
     chart_source_df = summary_df.copy()
 
+# CONDITIONAL SHRINKING LOGIC:
+# Shrink bars above 250 ONLY when viewing by Section Officer (ಶಾಖಾಧಿಕಾರಿಯ ಹೆಸರು).
+# Disable shrinking when viewing by AEE (ಸಹಾಯಕ ಕಾರ್ಯಪಾಲಕ ಇಂಜಿನಿಯರ್ ಹೆಸರು).
+is_so_view = (view_choice == COL_SO)
+active_shrink_outliers = shrink_outliers and is_so_view
+
 if chart_source_df.empty:
     st.info("No officers match the current filter.")
 else:
     plot_df = chart_source_df.iloc[::-1].copy()
     plot_df["y_short"] = plot_df[view_choice].map(lambda s: shorten_label(s, 28))
-    plot_df["is_shrunk"] = shrink_outliers & (
+    plot_df["is_shrunk"] = active_shrink_outliers & (
         plot_df["total_works"] > BAR_SHRINK_THRESHOLD
     )
 
@@ -1159,7 +1117,7 @@ else:
     else:
         plot_df["overdue_plus_ets"] = plot_df["overdue_works"] + plot_df["ets_works"]
 
-        if shrink_outliers:
+        if active_shrink_outliers:
             plot_df["vis_total"] = plot_df["total_works"].map(compress_bar_length)
             plot_df["vis_overdue_plus_ets"] = plot_df["overdue_plus_ets"].map(
                 compress_bar_length
@@ -1265,8 +1223,13 @@ else:
             )
         )
 
-        # Ensure full text labels on the longest bar never clip at the right edge
-        max_x = max(float(plot_df["vis_total"].max()), 1.0)
+        named_vis = plot_df.loc[~plot_df["_is_unassigned"], "vis_total"]
+        base_max_x = (
+            float(named_vis.max())
+            if not named_vis.empty
+            else float(plot_df["vis_total"].max())
+        )
+        max_x = max(base_max_x, float(plot_df["vis_total"].max()), 1.0)
         x_range_max = max_x * 1.38
         x_axis_title = "Number of Works"
 
@@ -1298,13 +1261,13 @@ else:
             x=0,
             traceorder="reversed",
         ),
-        margin=dict(l=225, r=50, t=35, b=40),
+        margin=dict(l=230, r=50, t=35, b=40),
     )
 
     st.plotly_chart(fig, use_container_width=True)
 
 # -----------------------------------------------------------------------------
-# DETAILED SUMMARY TABLE (FILTERED BY ವಿಭಾಗ)
+# DETAILED SUMMARY TABLE
 # -----------------------------------------------------------------------------
 st.subheader(f"📋 Officer-Wise Summary Table — [{COL_DIV}: {div_badge}]")
 
