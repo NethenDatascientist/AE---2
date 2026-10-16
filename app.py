@@ -70,12 +70,14 @@ TARGET_SHEETS = [
     "NABARD - Other Flood Control",
 ]
 
+COL_DIV = "ವಿಭಾಗ"
 COL_SO = "ಶಾಖಾಧಿಕಾರಿಯ ಹೆಸರು"
 COL_AEE = "ಸಹಾಯಕ ಕಾರ್ಯಪಾಲಕ ಇಂಜಿನಿಯರ್ ಹೆಸರು"
 COL_TARGET_DATE = "ಕಾಮಗಾರಿ ಮುಕ್ತಾಯಗೊಳಿಸಬೇಕಾದ ದಿನಾಂಕ"
 COL_ACTUAL_DATE = "ಮುಕ್ತಾಯವಾದ ದಿನಾಂಕ"
 COL_STATUS_STD = "CP/CF/P/TBS/TP/ETS/OTH"
 
+ALL_DIVISIONS_OPTION = "ALL (ಎಲ್ಲಾ ವಿಭಾಗಗಳು)"
 UNASSIGNED_LABEL = "ಹೆಸರು ನಮೂದಿಸಿಲ್ಲ / Unassigned (Empty)"
 
 DEFAULT_SHEET_URL = st.secrets.get(
@@ -83,15 +85,15 @@ DEFAULT_SHEET_URL = st.secrets.get(
     "https://docs.google.com/spreadsheets/d/13W04z-fdU3RhuVJ5vQFRpK4BBSQRJWfscPqpr7Oj2Y8/edit?gid=1055199869#gid=1055199869",
 )
 
-SCHEMA_VERSION = "v7_date_overflow_fix"
-DISK_BACKUP_FILE = "/tmp/mi_overdue_shared_snapshot_v7.pkl"
+SCHEMA_VERSION = "v8_vibhaga_logic"
+DISK_BACKUP_FILE = "/tmp/mi_overdue_shared_snapshot_v8.pkl"
 
 
 # -----------------------------------------------------------------------------
 # SHARED SERVER MEMORY & LOCK
 # -----------------------------------------------------------------------------
 @st.cache_resource
-def get_shared_state_v7() -> dict:
+def get_shared_state_v8() -> dict:
     state = {
         "version": SCHEMA_VERSION,
         "lock": threading.Lock(),
@@ -118,8 +120,7 @@ def get_shared_state_v7() -> dict:
 def to_safe_python_date(val):
     """
     Convert any datetime/Timestamp/date object into a plain Python datetime.date.
-    Plain Python date objects support years 0001 to 9999 and never trigger
-    Pandas 'Cannot cast ... to unit=ns without overflow' or timezone errors.
+    Supports years 0001 to 9999 and avoids Pandas nanosecond overflow & timezone errors.
     """
     if val is None:
         return None
@@ -145,9 +146,8 @@ def read_sheet_safely(
     excel_file: pd.ExcelFile, workbook_bytes: bytes, sheet_name: str
 ) -> pd.DataFrame:
     """
-    Read a worksheet safely. If pd.read_excel fails due to out-of-bounds dates
-    (like year 0203 in 4702_A&P) or mixed timezones (in SCP Borewell),
-    automatically fall back to direct openpyxl cell reading.
+    Read a worksheet safely. Falls back to direct openpyxl reading if pd.read_excel
+    encounters out-of-bounds dates or mixed timezones.
     """
     try:
         raw_df = pd.read_excel(
@@ -243,14 +243,38 @@ def download_xlsx_bytes(sheet_url: str) -> bytes:
 
 
 def find_matching_column_indices(headers: list[str]) -> dict:
-    """Find required 0-based column positions across sheets."""
+    """
+    Find required 0-based column positions across sheets:
+    - ವಿಭಾಗ (Division, excluding ಉಪ ವಿಭಾಗ / Sub-Division)
+    - ಶಾಖಾಧಿಕಾರಿಯ ಹೆಸರು
+    - ಸಹಾಯಕ ಕಾರ್ಯಪಾಲಕ ಇಂಜಿನಿಯರ್ ಹೆಸರು
+    - ಕಾಮಗಾರಿ ಮುಕ್ತಾಯಗೊಳಿಸಬೇಕಾದ ದಿನಾಂಕ
+    - ಮುಕ್ತಾಯವಾದ ದಿನಾಂಕ
+    - Status column containing 'CP/CF'
+    """
     col_idx_map = {}
+
+    # Pass 1: Look for exact "ವಿಭಾಗ" match first so it is never confused with "ಉಪ ವಿಭಾಗ"
+    for idx, col in enumerate(headers):
+        norm_col = normalize_text(col)
+        if norm_col in {"ವಿಭಾಗ", "ವಿಭಾಗದ ಹೆಸರು"} and "division" not in col_idx_map:
+            col_idx_map["division"] = idx
+            break
+
+    # Pass 2: Match remaining columns (and fallback for "ವಿಭಾಗ" excluding "ಉಪ")
     for idx, col in enumerate(headers):
         norm_col = normalize_text(col)
         upper_col = norm_col.upper()
         compact_upper = re.sub(r"\s+", "", upper_col)
 
-        if (COL_SO in norm_col or "ಶಾಖಾಧಿಕಾರಿ" in norm_col) and "so" not in col_idx_map:
+        if (
+            "ವಿಭಾಗ" in norm_col
+            and "ಉಪ" not in norm_col
+            and "SUB" not in upper_col
+            and "division" not in col_idx_map
+        ):
+            col_idx_map["division"] = idx
+        elif (COL_SO in norm_col or "ಶಾಖಾಧಿಕಾರಿ" in norm_col) and "so" not in col_idx_map:
             col_idx_map["so"] = idx
         elif (
             COL_AEE in norm_col or "ಸಹಾಯಕ ಕಾರ್ಯಪಾಲಕ ಇಂಜಿನಿಯರ್" in norm_col
@@ -275,6 +299,8 @@ def find_matching_column_indices(headers: list[str]) -> dict:
 def build_clean_unique_headers(raw_headers: list[str], col_idx_map: dict) -> list[str]:
     """Standardize key column names across sheets and deduplicate repeated headers."""
     standardized = list(raw_headers)
+    if "division" in col_idx_map:
+        standardized[col_idx_map["division"]] = COL_DIV
     if "so" in col_idx_map:
         standardized[col_idx_map["so"]] = COL_SO
     if "aee" in col_idx_map:
@@ -302,7 +328,6 @@ def build_clean_unique_headers(raw_headers: list[str], col_idx_map: dict) -> lis
 def parse_indian_date_list(series: pd.Series) -> list:
     """
     Parse dates into a list of plain Python `datetime.date` objects (or `None`).
-    Completely avoids Pandas nanosecond (`unit='ns'`) overflow on typo years like 0203.
     """
     parsed_dates = []
     for raw_val in series.tolist():
@@ -326,10 +351,8 @@ def parse_indian_date_list(series: pd.Series) -> list:
             p1, p2, p3 = int(match.group(1)), int(match.group(2)), int(match.group(3))
             try:
                 if p1 > 31:
-                    # YYYY-MM-DD
                     parsed_dates.append(date(max(1, min(9999, p1)), p2, p3))
                 else:
-                    # DD-MM-YYYY (handle 2-digit years like 24 -> 2024)
                     yr = p3 + 2000 if p3 < 100 else p3
                     parsed_dates.append(date(max(1, min(9999, yr)), p2, p1))
                 continue
@@ -365,10 +388,35 @@ def is_empty_date(series: pd.Series) -> pd.Series:
     return pd.Series(results, index=series.index, dtype=bool)
 
 
+def is_valid_division_text(val: str) -> bool:
+    """
+    Row inclusion rule:
+    Consider a row if and only if it has a valid text value in the 'ವಿಭಾಗ' column.
+    Excludes blank cells, pure numbers/symbols (e.g. '1', '2', '-'), repeated header
+    text ('ವಿಭಾಗ'), and 'ಒಟ್ಟು' / 'Total' summary rows.
+    """
+    if not val:
+        return False
+    upper = val.upper().strip()
+    if upper in {"-", "--", "---", "NIL", "NA", "N/A", "NONE", "NAN", "NAT", "NULL", "0"}:
+        return False
+    # Exclude cells that contain only digits/punctuation/symbols and no text letters
+    if re.fullmatch(r"[\d\W_]+", val):
+        return False
+    # Exclude repeated header row or summary/total labels
+    if val in {COL_DIV, "ವಿಭಾಗದ ಹೆಸರು", "ಒಟ್ಟು", "ಒಟ್ಟು ಮೊತ್ತ", "ಮಹಾ ಒಟ್ಟು"}:
+        return False
+    if upper in {"DIVISION", "DIVISION NAME", "TOTAL", "GRAND TOTAL", "SUB TOTAL"}:
+        return False
+    if val.startswith("ಒಟ್ಟು ") or val.endswith(" ಒಟ್ಟು") or upper.startswith("TOTAL "):
+        return False
+    return True
+
+
 def map_officer_or_unassigned(name: str) -> str:
     """
-    Map blank or placeholder officer cells to UNASSIGNED_LABEL instead of
-    dropping the row. Returns '' only if the cell is a summary/header token.
+    Map blank or placeholder officer cells to UNASSIGNED_LABEL so works with a valid
+    'ವಿಭಾಗ' but empty officer name are still counted under the Unassigned bar at the bottom.
     """
     if not name:
         return UNASSIGNED_LABEL
@@ -385,30 +433,8 @@ def map_officer_or_unassigned(name: str) -> str:
         or COL_SO in name
         or COL_AEE in name
     ):
-        return ""
+        return UNASSIGNED_LABEL
     return name
-
-
-def is_summary_or_index_row(
-    row_vals: list, so_val: str, aee_val: str, status_val: str
-) -> bool:
-    """
-    Exclude repeated header rows, column-index rows (1, 2, 3, 4...),
-    and 'ಒಟ್ಟು' / 'Total' summary rows so only real works are counted.
-    """
-    if COL_SO in so_val or COL_AEE in aee_val or "CP/CF" in status_val.upper():
-        return True
-    if status_val.isdigit() and (so_val.isdigit() or aee_val.isdigit()):
-        return True
-
-    head_text = " | ".join(normalize_text(c) for c in row_vals[:8]).upper()
-    if (
-        "ಒಟ್ಟು" in head_text
-        or "GRAND TOTAL" in head_text
-        or re.search(r"\bTOTAL\b", head_text)
-    ):
-        return True
-    return False
 
 
 def shorten_label(name: str, max_len: int = 28) -> str:
@@ -427,7 +453,10 @@ def convert_df_to_excel_bytes(df: pd.DataFrame) -> bytes:
 
 
 def parse_xlsx_workbook(workbook_bytes: bytes):
-    """Parse all 23 target worksheets safely without date overflow or timezone errors."""
+    """
+    Parse all 23 target worksheets.
+    A row is counted if and only if the 'ವಿಭಾಗ' column contains a valid text value.
+    """
     progress = st.progress(0, text="Opening workbook...")
 
     try:
@@ -460,7 +489,7 @@ def parse_xlsx_workbook(workbook_bytes: bytes):
                 {
                     "Sheet": target,
                     "Status": "Missing in Workbook",
-                    "Rows Loaded": 0,
+                    "Rows Loaded (Valid ವಿಭಾಗ)": 0,
                     "Overdue Rows ('P')": 0,
                     "ETS Rows": 0,
                 }
@@ -474,7 +503,7 @@ def parse_xlsx_workbook(workbook_bytes: bytes):
                     {
                         "Sheet": target,
                         "Status": "Empty Sheet",
-                        "Rows Loaded": 0,
+                        "Rows Loaded (Valid ವಿಭಾಗ)": 0,
                         "Overdue Rows ('P')": 0,
                         "ETS Rows": 0,
                     }
@@ -499,7 +528,7 @@ def parse_xlsx_workbook(workbook_bytes: bytes):
                     {
                         "Sheet": target,
                         "Status": "Header Row Not Found",
-                        "Rows Loaded": 0,
+                        "Rows Loaded (Valid ವಿಭಾಗ)": 0,
                         "Overdue Rows ('P')": 0,
                         "ETS Rows": 0,
                     }
@@ -511,7 +540,14 @@ def parse_xlsx_workbook(workbook_bytes: bytes):
             ]
             col_idx_map = find_matching_column_indices(raw_headers)
 
-            required_keys = {"so", "aee", "target_date", "actual_date", "status"}
+            required_keys = {
+                "division",
+                "so",
+                "aee",
+                "target_date",
+                "actual_date",
+                "status",
+            }
             if (required_keys - set(col_idx_map.keys())) and (
                 header_idx + 1 < len(raw_df)
             ):
@@ -526,13 +562,26 @@ def parse_xlsx_workbook(workbook_bytes: bytes):
                     raw_headers = combined_headers
                     col_idx_map = alt_map
 
+            # Also check 1 row above header_idx in case "ವಿಭಾಗ" was on the top merged row
+            if ("division" not in col_idx_map) and (header_idx > 0):
+                prev_row = [
+                    normalize_text(col) for col in raw_df.iloc[header_idx - 1].tolist()
+                ]
+                combined_prev = [
+                    f"{h1} {h2}".strip() for h1, h2 in zip(prev_row, raw_headers)
+                ]
+                alt_prev_map = find_matching_column_indices(combined_prev)
+                if "division" in alt_prev_map:
+                    col_idx_map["division"] = alt_prev_map["division"]
+                    raw_headers[col_idx_map["division"]] = COL_DIV
+
             missing_keys = required_keys - set(col_idx_map.keys())
             if missing_keys:
                 sheet_diagnostics.append(
                     {
                         "Sheet": target,
                         "Status": f"Missing Columns: {', '.join(sorted(missing_keys))}",
-                        "Rows Loaded": 0,
+                        "Rows Loaded (Valid ವಿಭಾಗ)": 0,
                         "Overdue Rows ('P')": 0,
                         "ETS Rows": 0,
                     }
@@ -541,6 +590,14 @@ def parse_xlsx_workbook(workbook_bytes: bytes):
 
             df = raw_df.iloc[header_idx + 1 :].reset_index(drop=True).copy()
 
+            s_div_raw = pd.Series(
+                [
+                    normalize_text(v)
+                    for v in df.iloc[:, col_idx_map["division"]].tolist()
+                ],
+                index=df.index,
+                dtype=str,
+            )
             s_so_raw = pd.Series(
                 [normalize_text(v) for v in df.iloc[:, col_idx_map["so"]].tolist()],
                 index=df.index,
@@ -578,27 +635,8 @@ def parse_xlsx_workbook(workbook_bytes: bytes):
             # Overdue Logic: Status is 'P'/'p', target date < Today, actual completion date is empty
             is_overdue = is_status_p & target_is_before_today & actual_empty
 
-            # Determine valid work rows
-            row_lists = df.to_numpy().tolist()
-            valid_flags = []
-            for r_idx, r_vals in enumerate(row_lists):
-                so_v = s_so_raw.iat[r_idx]
-                aee_v = s_aee_raw.iat[r_idx]
-                st_v = s_status.iat[r_idx]
-                has_key_data = (
-                    (st_v != "")
-                    or (so_v != "")
-                    or (aee_v != "")
-                    or (target_date_list[r_idx] is not None)
-                )
-                if not has_key_data:
-                    valid_flags.append(False)
-                elif is_summary_or_index_row(r_vals, so_v, aee_v, st_v):
-                    valid_flags.append(False)
-                else:
-                    valid_flags.append(True)
-
-            valid_row_mask = pd.Series(valid_flags, index=df.index, dtype=bool)
+            # Row Inclusion Logic: Row is considered ONLY if 'ವಿಭಾಗ' column has a valid text value
+            valid_row_mask = s_div_raw.map(is_valid_division_text)
 
             s_so_mapped = s_so_raw.map(map_officer_or_unassigned)
             s_aee_mapped = s_aee_raw.map(map_officer_or_unassigned)
@@ -606,6 +644,7 @@ def parse_xlsx_workbook(workbook_bytes: bytes):
             sub = pd.DataFrame(
                 {
                     "sheet_name": target,
+                    "division_name": s_div_raw,
                     "so_name": s_so_mapped,
                     "aee_name": s_aee_mapped,
                     "status_raw": s_status,
@@ -643,6 +682,7 @@ def parse_xlsx_workbook(workbook_bytes: bytes):
                         full_df.drop(columns=[u_col], inplace=True)
 
                 full_df.insert(0, "Worksheet / ಯೋಜನೆ", target)
+                full_df["_division_name"] = s_div_raw.loc[overdue_mask].values
                 full_df["_so_name"] = s_so_mapped.loc[overdue_mask].values
                 full_df["_aee_name"] = s_aee_mapped.loc[overdue_mask].values
 
@@ -652,7 +692,7 @@ def parse_xlsx_workbook(workbook_bytes: bytes):
                 {
                     "Sheet": target,
                     "Status": "Loaded",
-                    "Rows Loaded": len(sub),
+                    "Rows Loaded (Valid ವಿಭಾಗ)": len(sub),
                     "Overdue Rows ('P')": int(overdue_mask.sum()),
                     "ETS Rows": int((valid_row_mask & is_status_ets).sum()),
                 }
@@ -663,7 +703,7 @@ def parse_xlsx_workbook(workbook_bytes: bytes):
                 {
                     "Sheet": target,
                     "Status": f"Error: {sheet_err}",
-                    "Rows Loaded": 0,
+                    "Rows Loaded (Valid ವಿಭಾಗ)": 0,
                     "Overdue Rows ('P')": 0,
                     "ETS Rows": 0,
                 }
@@ -766,7 +806,7 @@ show_unassigned_bar = st.sidebar.checkbox(
 # -----------------------------------------------------------------------------
 st.title("📊 Minor Irrigation — Overdue Works Dashboard")
 
-shared_state = get_shared_state_v7()
+shared_state = get_shared_state_v8()
 
 if uploaded_xlsx is not None:
     file_id = f"{uploaded_xlsx.name}_{uploaded_xlsx.size}_{SCHEMA_VERSION}"
@@ -816,7 +856,7 @@ master_df, overdue_full_df, diag_df, today_str = shared_state["data"]
 st.caption(
     f"⚡ **Data Source:** {shared_state['source_label']} &nbsp;|&nbsp; "
     f"**Last Synced:** {shared_state['last_synced']} IST &nbsp;|&nbsp; "
-    f"*(Cached in shared memory — TV & secondary screens load instantaneously)*"
+    f"*(Row Count Rule: Rows with valid text in **'{COL_DIV}'** column)*"
 )
 
 if master_df.empty:
@@ -825,20 +865,32 @@ if master_df.empty:
     st.stop()
 
 # -----------------------------------------------------------------------------
-# TOP CONTROLS: OFFICER VIEW & SORT ORDER
+# TOP CONTROLS: ವಿಭಾಗ DROPDOWN, OFFICER VIEW, & SORT ORDER
 # -----------------------------------------------------------------------------
-ctrl_col1, ctrl_col2 = st.columns(2)
+unique_divisions = sorted(
+    [d for d in master_df["division_name"].dropna().unique().tolist() if d != ""]
+)
+division_options = [ALL_DIVISIONS_OPTION] + unique_divisions
+
+ctrl_col1, ctrl_col2, ctrl_col3 = st.columns([1.3, 1.3, 1.4])
 
 with ctrl_col1:
+    selected_division = st.selectbox(
+        f"🏛️ {COL_DIV} ಆಯ್ಕೆಮಾಡಿ / Select {COL_DIV} (Applies to All Values):",
+        options=division_options,
+        index=0,
+    )
+
+with ctrl_col2:
     view_choice = st.radio(
-        "ವೀಕ್ಷಣೆ ಆಯ್ಕೆಮಾಡಿ / Select Officer View:",
+        "👤 ವೀಕ್ಷಣೆ ಆಯ್ಕೆಮಾಡಿ / Select Officer View:",
         options=[COL_SO, COL_AEE],
         horizontal=True,
     )
 
-with ctrl_col2:
+with ctrl_col3:
     sort_choice = st.radio(
-        "ಕ್ರಮಬದ್ಧಗೊಳಿಸಿ / Sort Chart & Table By:",
+        "⬇️ ಕ್ರಮಬದ್ಧಗೊಳಿಸಿ / Sort Chart & Table By:",
         options=[
             "Highest Overdue Count at Top",
             "Highest Overdue Percentage (%) at Top",
@@ -846,16 +898,33 @@ with ctrl_col2:
         horizontal=True,
     )
 
+# Also show active division in the sidebar
+st.sidebar.markdown(f"**Active {COL_DIV}:** `{selected_division}`")
+
 group_col = "so_name" if view_choice == COL_SO else "aee_name"
 full_filter_col = "_so_name" if view_choice == COL_SO else "_aee_name"
 
-valid_df = master_df[master_df[group_col] != ""].copy()
+# -----------------------------------------------------------------------------
+# APPLY ವಿಭಾಗ FILTER TO ALL VALUES
+# -----------------------------------------------------------------------------
+if selected_division != ALL_DIVISIONS_OPTION:
+    div_filtered_df = master_df[
+        master_df["division_name"] == selected_division
+    ].copy()
+else:
+    div_filtered_df = master_df.copy()
+
+valid_df = div_filtered_df[div_filtered_df[group_col] != ""].copy()
 
 if not show_unassigned_bar:
     valid_df = valid_df[valid_df[group_col] != UNASSIGNED_LABEL].copy()
 
 if denominator_mode.startswith("Only Ongoing Works"):
     valid_df = valid_df[valid_df["is_status_p"]].copy()
+
+if valid_df.empty:
+    st.warning(f"No works found for **{COL_DIV}: {selected_division}**.")
+    st.stop()
 
 summary_df = (
     valid_df.groupby(group_col, as_index=False)
@@ -891,7 +960,7 @@ else:
     ).reset_index(drop=True)
 
 # -----------------------------------------------------------------------------
-# KPI SUMMARY METRICS
+# KPI SUMMARY METRICS (FILTERED BY ವಿಭಾಗ)
 # -----------------------------------------------------------------------------
 total_assigned_all = int(summary_df["total_works"].sum())
 total_overdue_all = int(summary_df["overdue_works"].sum())
@@ -907,26 +976,35 @@ overall_overdue_pct = (
     else 0.0
 )
 
-k1, k2, k3, k4, k5 = st.columns(5)
-k1.metric("📅 Comparison Date (Today)", today_str)
-k2.metric(
+div_badge = (
+    "ಎಲ್ಲಾ ವಿಭಾಗಗಳು (ALL)"
+    if selected_division == ALL_DIVISIONS_OPTION
+    else selected_division
+)
+
+k1, k2, k3, k4, k5, k6 = st.columns(6)
+k1.metric("📅 Date (Today)", today_str)
+k2.metric(f"🏛️ {COL_DIV}", div_badge)
+k3.metric(
     f"👥 Officers ({view_choice})",
     f"{named_officers_count:,}",
     help=f"Plus {unassigned_works_count:,} works where {view_choice} is empty.",
 )
-k3.metric("📋 Total Works (incl. Empty)", f"{total_assigned_all:,}")
-k4.metric(
-    "🔴 Total Overdue Works ('P')",
+k4.metric("📋 Total Works", f"{total_assigned_all:,}")
+k5.metric(
+    "🔴 Overdue Works ('P')",
     f"{total_overdue_all:,} ({overall_overdue_pct}%)",
 )
-k5.metric("🟢 Total 'ETS' Works", f"{total_ets_all:,}")
+k6.metric("🟢 'ETS' Works", f"{total_ets_all:,}")
 
 st.divider()
 
 # -----------------------------------------------------------------------------
-# HORIZONTAL BAR CHART (UNASSIGNED BAR PINNED AT THE BOTTOM)
+# HORIZONTAL BAR CHART (FILTERED BY ವಿಭಾಗ, UNASSIGNED PINNED AT BOTTOM)
 # -----------------------------------------------------------------------------
-st.subheader(f"📈 Overdue & ETS Works by {view_choice} ({sort_choice})")
+st.subheader(
+    f"📈 Overdue & ETS Works by {view_choice} — [{COL_DIV}: {div_badge}] ({sort_choice})"
+)
 
 if hide_zero_overdue:
     chart_source_df = summary_df[
@@ -988,6 +1066,7 @@ else:
                 ],
                 hovertemplate=(
                     f"<b>{view_choice}:</b> %{{customdata[0]}}<br>"
+                    f"<b>{COL_DIV}:</b> {div_badge}<br>"
                     "<b>Overdue Works ('P'):</b> %{x}<br>"
                     "<b>ETS Works ('ETS'):</b> %{customdata[3]}<br>"
                     "<b>Rest of Works:</b> %{customdata[4]}<br>"
@@ -1027,6 +1106,7 @@ else:
                 ],
                 hovertemplate=(
                     f"<b>{view_choice}:</b> %{{customdata[0]}}<br>"
+                    f"<b>{COL_DIV}:</b> {div_badge}<br>"
                     "<b>Overdue Percentage:</b> %{x:.1f}%<br>"
                     "<b>Overdue Works ('P'):</b> %{customdata[3]}<br>"
                     "<b>ETS Works ('ETS'):</b> %{customdata[4]}<br>"
@@ -1068,6 +1148,7 @@ else:
                 ],
                 hovertemplate=(
                     f"<b>{view_choice}:</b> %{{customdata[0]}}<br>"
+                    f"<b>{COL_DIV}:</b> {div_badge}<br>"
                     "<b>Total Works Assigned:</b> %{customdata[1]}<br>"
                     "<b>Overdue Works ('P'):</b> %{customdata[2]}<br>"
                     "<b>ETS Works ('ETS'):</b> %{customdata[3]}<br>"
@@ -1096,6 +1177,7 @@ else:
                 ],
                 hovertemplate=(
                     f"<b>{view_choice}:</b> %{{customdata[0]}}<br>"
+                    f"<b>{COL_DIV}:</b> {div_badge}<br>"
                     "<b>ETS Works ('ETS'):</b> %{customdata[3]}<br>"
                     "<b>Overdue Works ('P'):</b> %{customdata[2]}<br>"
                     "<b>Rest of Works:</b> %{customdata[4]}<br>"
@@ -1124,6 +1206,7 @@ else:
                 ],
                 hovertemplate=(
                     f"<b>{view_choice}:</b> %{{customdata[0]}}<br>"
+                    f"<b>{COL_DIV}:</b> {div_badge}<br>"
                     "<b>Overdue Works ('P'):</b> %{x}<br>"
                     "<b>ETS Works ('ETS'):</b> %{customdata[4]}<br>"
                     "<b>Rest of Works:</b> %{customdata[5]}<br>"
@@ -1171,9 +1254,9 @@ else:
     st.plotly_chart(fig, use_container_width=True)
 
 # -----------------------------------------------------------------------------
-# DETAILED SUMMARY TABLE
+# DETAILED SUMMARY TABLE (FILTERED BY ವಿಭಾಗ)
 # -----------------------------------------------------------------------------
-st.subheader("📋 Officer-Wise Summary Table")
+st.subheader(f"📋 Officer-Wise Summary Table — [{COL_DIV}: {div_badge}]")
 
 display_table = summary_df[
     [
@@ -1208,7 +1291,7 @@ st.divider()
 # BOTTOM SECTION: OFFICER DROPDOWN & COMBINED OVERDUE WORKS TABLE + DOWNLOAD
 # -----------------------------------------------------------------------------
 st.subheader(
-    f"📂 ಅಧಿಕಾರಿಗಳ ವಾರು ಅವಧಿ ಮೀರಿದ ಕಾಮಗಾರಿಗಳ ವಿವರ / Combined Overdue Works by {view_choice}"
+    f"📂 ಅಧಿಕಾರಿಗಳ ವಾರು ಅವಧಿ ಮೀರಿದ ಕಾಮಗಾರಿಗಳ ವಿವರ / Combined Overdue Works by {view_choice} — [{COL_DIV}: {div_badge}]"
 )
 
 officer_options = summary_df[view_choice].tolist()
@@ -1224,7 +1307,7 @@ officer_stats_map = {
 }
 
 selected_officer = st.selectbox(
-    f"Select {view_choice} (including Unassigned at the bottom) to view and download their Overdue Works:",
+    f"Select {view_choice} (Filtered by {COL_DIV}: {div_badge}) to view and download their Overdue Works:",
     options=officer_options,
     index=0 if officer_options else None,
     format_func=lambda name: (
@@ -1242,8 +1325,16 @@ if selected_officer:
             overdue_full_df[full_filter_col] == selected_officer
         ].copy()
 
+        # Apply the active ವಿಭಾಗ filter to the bottom drill-down table as well
+        if selected_division != ALL_DIVISIONS_OPTION:
+            officer_overdue_df = officer_overdue_df[
+                officer_overdue_df["_division_name"] == selected_division
+            ].copy()
+
         internal_cols = [
-            c for c in ["_so_name", "_aee_name"] if c in officer_overdue_df.columns
+            c
+            for c in ["_division_name", "_so_name", "_aee_name"]
+            if c in officer_overdue_df.columns
         ]
         officer_overdue_df.drop(columns=internal_cols, inplace=True)
 
@@ -1260,10 +1351,13 @@ if selected_officer:
         officer_overdue_df.index.name = "Sl. No."
 
         if officer_overdue_df.empty:
-            st.success(f"🎉 **{selected_officer}** has **0** overdue works!")
+            st.success(
+                f"🎉 **{selected_officer}** has **0** overdue works in **{div_badge}**!"
+            )
         else:
             sheets_involved = officer_overdue_df["Worksheet / ಯೋಜನೆ"].unique().tolist()
             st.markdown(
+                f"**{COL_DIV}:** `{div_badge}` &nbsp;|&nbsp; "
                 f"**Selected {view_choice}:** `{selected_officer}` &nbsp;|&nbsp; "
                 f"**Total Overdue Works:** `{len(officer_overdue_df)}` &nbsp;|&nbsp; "
                 f"**Worksheets:** `{', '.join(sheets_involved)}`"
@@ -1271,6 +1365,9 @@ if selected_officer:
 
             safe_name = (
                 re.sub(r"[^\w\-]+", "_", selected_officer).strip("_") or "Unassigned"
+            )
+            safe_div = (
+                re.sub(r"[^\w\-]+", "_", div_badge).strip("_") or "All_Divisions"
             )
             excel_bytes = convert_df_to_excel_bytes(officer_overdue_df.reset_index())
             csv_bytes = (
@@ -1282,7 +1379,7 @@ if selected_officer:
                 st.download_button(
                     label="📥 Download Excel (.xlsx)",
                     data=excel_bytes,
-                    file_name=f"Overdue_Works_{safe_name}_{today_str}.xlsx",
+                    file_name=f"Overdue_Works_{safe_div}_{safe_name}_{today_str}.xlsx",
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                     use_container_width=True,
                 )
@@ -1290,7 +1387,7 @@ if selected_officer:
                 st.download_button(
                     label="📥 Download CSV (.csv)",
                     data=csv_bytes,
-                    file_name=f"Overdue_Works_{safe_name}_{today_str}.csv",
+                    file_name=f"Overdue_Works_{safe_div}_{safe_name}_{today_str}.csv",
                     mime="text/csv",
                     use_container_width=True,
                 )
