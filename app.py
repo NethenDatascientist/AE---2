@@ -27,12 +27,12 @@ st.set_page_config(
 st.markdown(
     """
     <style>
-        /* Full width main container — content extends behind the transparent scroller */
+        /* Full-width layout — content extends right behind the transparent 26px scroller */
         .block-container {
             max-width: 100% !important;
             padding-left: 1.1rem !important;
-            padding-right: 0.8rem !important;
-            padding-top: 2.4rem !important;
+            padding-right: 0.7rem !important;
+            padding-top: 2.3rem !important;
             padding-bottom: 2rem !important;
         }
         [data-testid="stPlotlyChart"] {
@@ -190,13 +190,12 @@ st.markdown(
 
 
 # -----------------------------------------------------------------------------
-# HALF-WIDTH (26px), LINE-FREE, TEXT-FREE RIGHT-EDGE SCROLL RULER HUD
+# TRANSPARENT, HALF-WIDTH (26px), LINE-FREE & TEXT-FREE RIGHT-EDGE SCROLLER
 # -----------------------------------------------------------------------------
 def inject_scroll_hud_graphics(enabled: bool = True):
     """
-    Injects a half-width (26px), line-free, writing-free right-edge scrolling
-    ruler overlay. Always replaces any cached style/DOM nodes in window.parent
-    so old borders or vertical text never persist.
+    Injects a 100% transparent, half-width (26px), line-free, writing-free
+    right-edge scrolling ruler overlay so any text or chart behind it is visible.
     """
     components.html(
         f"""
@@ -229,15 +228,18 @@ def inject_scroll_hud_graphics(enabled: bool = True):
                     width: 26px !important; /* Half width (26px) */
                     height: 100vh !important;
                     z-index: 999990 !important;
-                    pointer-events: none !important;
+                    pointer-events: none !important; /* Click-through & see-through */
                     user-select: none !important;
                     overflow: hidden !important;
                     background: transparent !important;
+                    background-color: transparent !important;
+                    backdrop-filter: none !important;
+                    -webkit-backdrop-filter: none !important;
                     border: none !important;
                     border-left: none !important;
                     outline: none !important;
                     box-shadow: none !important;
-                    font-family: 'JetBrains Mono', monospace !important;
+                    font-family: 'JetBrains Mono', 'Courier New', monospace !important;
                 }}
 
                 #mi-scroll-hud-track {{
@@ -247,8 +249,8 @@ def inject_scroll_hud_graphics(enabled: bool = True):
                     width: 100% !important;
                     will-change: transform;
                     pointer-events: none !important;
-                    border: none !important;
                     background: transparent !important;
+                    border: none !important;
                 }}
 
                 .mi-hud-tick {{
@@ -258,6 +260,7 @@ def inject_scroll_hud_graphics(enabled: bool = True):
                     align-items: center;
                     justify-content: flex-end;
                     transform: translateY(-50%);
+                    background: transparent !important;
                 }}
 
                 .mi-hud-tick-label {{
@@ -266,19 +269,20 @@ def inject_scroll_hud_graphics(enabled: bool = True):
                     color: rgba(226, 232, 240, 0.45);
                     margin-right: 3px;
                     letter-spacing: 0px;
-                    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9);
+                    background: transparent !important;
+                    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.85);
                 }}
 
                 .mi-hud-tick-line-major {{
                     width: 8px;
                     height: 1.5px;
-                    background: rgba(226, 232, 240, 0.52);
+                    background: rgba(226, 232, 240, 0.50);
                 }}
 
                 .mi-hud-tick-line-mid {{
                     width: 5px;
                     height: 1px;
-                    background: rgba(226, 232, 240, 0.26);
+                    background: rgba(226, 232, 240, 0.25);
                 }}
 
                 /* Compact glowing blue horizontal indicator bar & percentage */
@@ -289,13 +293,14 @@ def inject_scroll_hud_graphics(enabled: bool = True):
                     top: 50%;
                     transform: translateY(-1px);
                     pointer-events: none;
+                    background: transparent !important;
                     z-index: 6;
                 }}
 
                 #mi-scroll-hud-blue-line {{
                     width: 100%;
                     height: 2px;
-                    background: linear-gradient(90deg, rgba(59, 130, 246, 0.15) 0%, #3B82F6 45%, #93C5FD 100%);
+                    background: linear-gradient(90deg, rgba(59, 130, 246, 0.1) 0%, #3B82F6 45%, #93C5FD 100%);
                     box-shadow: 0 0 7px rgba(59, 130, 246, 0.95), 0 0 12px rgba(37, 99, 235, 0.65);
                 }}
 
@@ -307,6 +312,7 @@ def inject_scroll_hud_graphics(enabled: bool = True):
                     font-weight: 700;
                     letter-spacing: 0.2px;
                     color: #93C5FD;
+                    background: transparent !important;
                     text-shadow: 0 0 6px rgba(59, 130, 246, 0.95), 0 1px 2px rgba(0, 0, 0, 0.95);
                 }}
             `;
@@ -1316,7 +1322,7 @@ show_unassigned_bar = st.sidebar.checkbox(
 show_scroll_hud = st.sidebar.checkbox(
     "Show Right-Edge Scroll HUD Ruler",
     value=True,
-    help="Displays the ultra-slim 26px scrolling ruler on the right edge.",
+    help="Displays the 100% transparent, 26px scrolling ruler on the right edge.",
 )
 
 # -----------------------------------------------------------------------------
@@ -2012,5 +2018,5 @@ if selected_officer:
 with st.expander("🔍 Inspect Worksheet Loading Status (23 Target Sheets)"):
     st.dataframe(diag_df, use_container_width=True)
 
-# Mount the ultra-slim 26px right-edge scrolling HUD overlay (no border line, no writings)
+# Mount the 100% transparent, 26px half-width right-edge scrolling HUD overlay
 inject_scroll_hud_graphics(enabled=show_scroll_hud)
