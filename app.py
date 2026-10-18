@@ -1552,12 +1552,12 @@ overall_overdue_pct = (
 )
 
 div_badge = (
-    "ಎಲ್ಲಾ ವಿಭಾಗಗಳು (ALL)"
+    "ALL"
     if selected_division == ALL_DIVISIONS_OPTION
     else selected_division
 )
 subdiv_badge = (
-    "ಎಲ್ಲಾ ಉಪವಿಭಾಗಗಳು (ALL)"
+    "ALL"
     if selected_subdivision == ALL_SUBDIVISIONS_OPTION
     else selected_subdivision
 )
