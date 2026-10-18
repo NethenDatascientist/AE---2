@@ -1900,7 +1900,7 @@ st.divider()
 # SECTION 3: OFFICER DROPDOWN & COMBINED OVERDUE WORKS FULL DETAILS + DOWNLOAD
 # -----------------------------------------------------------------------------
 st.subheader(
-    f"📂 ಅಧಿಕಾರಿಗಳ ವಾರು ಅವಧಿ ಮೀರಿದ ಕಾಮಗಾರಿಗಳ ವಿವರ / Combined Overdue Works by {view_choice} — [{filter_scope_label}]"
+    f"📂 Combined Overdue Works by {view_choice} — [{filter_scope_label}]"
 )
 
 officer_options = summary_df[view_choice].tolist()
