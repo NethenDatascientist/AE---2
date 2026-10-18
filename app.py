@@ -514,8 +514,8 @@ COL_TARGET_DATE = "ಕಾಮಗಾರಿ ಮುಕ್ತಾಯಗೊಳಿಸಬ
 COL_ACTUAL_DATE = "ಮುಕ್ತಾಯವಾದ ದಿನಾಂಕ"
 COL_STATUS_STD = "CP/CF/P/TBS/TP/ETS/OTH"
 
-ALL_DIVISIONS_OPTION = "ALL (ಎಲ್ಲಾ ವಿಭಾಗಗಳು)"
-ALL_SUBDIVISIONS_OPTION = "ALL (ಎಲ್ಲಾ ಉಪವಿಭಾಗಗಳು)"
+ALL_DIVISIONS_OPTION = "ALL"
+ALL_SUBDIVISIONS_OPTION = "ALL"
 UNSPECIFIED_SUBDIV_LABEL = "ಉಪವಿಭಾಗ ನಮೂದಿಸಿಲ್ಲ / Not Specified (Empty)"
 UNASSIGNED_LABEL = "ಹೆಸರು ನಮೂದಿಸಿಲ್ಲ / Unassigned (Empty)"
 
