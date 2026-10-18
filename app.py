@@ -30,7 +30,7 @@ st.markdown(
         .block-container {
             max-width: 100% !important;
             padding-left: 1.5rem !important;
-            padding-right: 5.2rem !important; /* Leaves clean space for the right-edge Scroll HUD */
+            padding-right: 1.5rem !important; /* Full width restored — scroller overlays on top */
             padding-top: 2.8rem !important;
             padding-bottom: 2rem !important;
         }
@@ -59,12 +59,12 @@ st.markdown(
 
 
 # -----------------------------------------------------------------------------
-# FUTURISTIC SCROLL HUD RULER (FROM VIDEO)
+# TRANSPARENT OVERLAY SCROLL HUD GRAPHICS (FLOATS ABOVE CONTENT)
 # -----------------------------------------------------------------------------
 def inject_scroll_hud_graphics(enabled: bool = True):
     """
-    Injects a fixed right-edge scrolling ruler scale (0..100 with major ticks every 5 units),
-    crosshair guide line, and glowing blue '036 %' indicator into the parent Streamlit window.
+    Injects a transparent, click-through right-edge scrolling ruler overlay
+    so the dashboard content keeps 100% of its width underneath.
     """
     components.html(
         f"""
@@ -72,16 +72,18 @@ def inject_scroll_hud_graphics(enabled: bool = True):
         (function() {{
             const parentDoc = window.parent.document;
             const parentWin = window.parent;
-            const existingHud = parentDoc.getElementById("mi-scroll-hud-root");
-            const existingStyle = parentDoc.getElementById("mi-scroll-hud-style");
+            const isEnabled = {str(enabled).lower()};
 
-            if (!{str(enabled).lower()}) {{
-                if (existingHud) existingHud.remove();
-                if (existingStyle) existingStyle.remove();
+            const oldHud = parentDoc.getElementById("mi-scroll-hud-root");
+            const oldStyle = parentDoc.getElementById("mi-scroll-hud-style");
+
+            if (!isEnabled) {{
+                if (oldHud) oldHud.remove();
+                if (oldStyle) oldStyle.remove();
                 return;
             }}
 
-            if (!existingStyle) {{
+            if (!oldStyle) {{
                 const style = parentDoc.createElement("style");
                 style.id = "mi-scroll-hud-style";
                 style.innerHTML = `
@@ -91,23 +93,22 @@ def inject_scroll_hud_graphics(enabled: bool = True):
                         position: fixed;
                         top: 0;
                         right: 0;
-                        width: 76px;
+                        width: 108px;
                         height: 100vh;
                         z-index: 999990;
-                        pointer-events: auto;
-                        cursor: ns-resize;
+                        pointer-events: none; /* Pure overlay: never blocks clicks or shrinks content */
                         user-select: none;
                         overflow: hidden;
-                        background: linear-gradient(90deg, rgba(10, 12, 18, 0.0) 0%, rgba(10, 12, 18, 0.72) 35%, rgba(10, 12, 18, 0.92) 100%);
-                        border-left: 1px solid rgba(148, 163, 184, 0.14);
+                        background: transparent !important;
+                        border-left: 1px solid rgba(226, 232, 240, 0.14);
                         font-family: 'JetBrains Mono', 'Courier New', monospace;
                     }}
 
-                    /* Subtle crosshair '+' on the left border line */
+                    /* Crosshair '+' on the vertical guide border */
                     #mi-scroll-hud-crosshair {{
                         position: absolute;
                         left: -5px;
-                        top: 54%;
+                        top: 42%;
                         width: 11px;
                         height: 11px;
                         transform: translateY(-50%);
@@ -132,7 +133,7 @@ def inject_scroll_hud_graphics(enabled: bool = True):
                         background: rgba(226, 232, 240, 0.45);
                     }}
 
-                    /* Sliding ruler strip */
+                    /* Sliding ruler track */
                     #mi-scroll-hud-track {{
                         position: absolute;
                         top: 0;
@@ -154,64 +155,66 @@ def inject_scroll_hud_graphics(enabled: bool = True):
                     .mi-hud-tick-label {{
                         font-size: 11px;
                         font-weight: 500;
-                        color: rgba(226, 232, 240, 0.58);
+                        color: rgba(226, 232, 240, 0.70);
                         margin-right: 8px;
                         letter-spacing: 0.5px;
+                        text-shadow: 0 1px 4px rgba(0, 0, 0, 0.85);
                     }}
 
                     .mi-hud-tick-line-major {{
                         width: 18px;
                         height: 1.5px;
-                        background: rgba(226, 232, 240, 0.62);
+                        background: rgba(226, 232, 240, 0.70);
+                        box-shadow: 0 0 4px rgba(0, 0, 0, 0.6);
                     }}
 
                     .mi-hud-tick-line-mid {{
-                        width: 11px;
+                        width: 12px;
                         height: 1px;
-                        background: rgba(148, 163, 184, 0.36);
+                        background: rgba(226, 232, 240, 0.40);
                     }}
 
-                    .mi-hud-tick-line-minor {{
-                        width: 6px;
-                        height: 1px;
-                        background: rgba(148, 163, 184, 0.20);
-                    }}
-
-                    /* Glowing blue horizontal indicator & 3-digit percentage */
+                    /* Glowing blue horizontal indicator bar & '036 %' readout */
                     #mi-scroll-hud-indicator {{
                         position: absolute;
                         left: 0;
                         right: 0;
-                        top: 54%;
-                        transform: translateY(-50%);
+                        top: 50%;
+                        transform: translateY(-1px);
                         pointer-events: none;
-                        z-index: 5;
+                        z-index: 6;
                     }}
 
                     #mi-scroll-hud-blue-line {{
                         width: 100%;
                         height: 2px;
-                        background: linear-gradient(90deg, #1D4ED8 0%, #3B82F6 45%, #93C5FD 100%);
-                        box-shadow: 0 0 10px rgba(59, 130, 246, 0.95), 0 0 20px rgba(37, 99, 235, 0.65);
+                        background: linear-gradient(90deg, #1D4ED8 0%, #3B82F6 50%, #93C5FD 100%);
+                        box-shadow: 0 0 10px rgba(59, 130, 246, 0.95), 0 0 22px rgba(37, 99, 235, 0.75);
                     }}
 
                     #mi-scroll-hud-pct {{
                         margin-top: 5px;
-                        padding-left: 10px;
+                        padding-left: 8px;
                         font-size: 11.5px;
                         font-weight: 700;
                         letter-spacing: 1.2px;
                         color: #93C5FD;
-                        text-shadow: 0 0 8px rgba(59, 130, 246, 0.85);
+                        text-shadow: 0 0 8px rgba(59, 130, 246, 0.95), 0 1px 4px rgba(0, 0, 0, 0.9);
                     }}
 
                     @media (max-width: 768px) {{
                         #mi-scroll-hud-root {{
-                            width: 52px;
+                            width: 74px;
                         }}
                         .mi-hud-tick-label {{
                             font-size: 9.5px;
                             margin-right: 5px;
+                        }}
+                        .mi-hud-tick-line-major {{
+                            width: 12px;
+                        }}
+                        .mi-hud-tick-line-mid {{
+                            width: 8px;
                         }}
                         #mi-scroll-hud-pct {{
                             font-size: 9.5px;
@@ -222,34 +225,29 @@ def inject_scroll_hud_graphics(enabled: bool = True):
                 parentDoc.head.appendChild(style);
             }}
 
-            const PX_PER_UNIT = 34; // 1% = 34px, so 5% = 170px apart (matches video spacing)
+            const PX_PER_UNIT = 42;
 
             let hudRoot = parentDoc.getElementById("mi-scroll-hud-root");
             if (!hudRoot) {{
                 hudRoot = parentDoc.createElement("div");
                 hudRoot.id = "mi-scroll-hud-root";
-                hudRoot.title = "Click or drag to scroll page";
 
                 let ticksHtml = "";
-                for (let i = -15; i <= 115; i++) {{
-                    const yPos = i * PX_PER_UNIT;
-                    if (i >= 0 && i <= 100 && i % 5 === 0) {{
+                for (let step = -20; step <= 220; step++) {{
+                    const unitVal = step * 0.5;
+                    const yPos = unitVal * PX_PER_UNIT;
+
+                    if (step % 10 === 0 && unitVal >= 0 && unitVal <= 100) {{
                         ticksHtml += `
                             <div class="mi-hud-tick" style="top: ${{yPos}}px;">
-                                <span class="mi-hud-tick-label">${{i}}</span>
+                                <span class="mi-hud-tick-label">${{unitVal}}</span>
                                 <div class="mi-hud-tick-line-major"></div>
                             </div>
                         `;
-                    }} else if (i % 5 === 0) {{
+                    }} else if (step % 5 === 0) {{
                         ticksHtml += `
                             <div class="mi-hud-tick" style="top: ${{yPos}}px;">
                                 <div class="mi-hud-tick-line-mid"></div>
-                            </div>
-                        `;
-                    }} else {{
-                        ticksHtml += `
-                            <div class="mi-hud-tick" style="top: ${{yPos}}px;">
-                                <div class="mi-hud-tick-line-minor"></div>
                             </div>
                         `;
                     }}
@@ -266,109 +264,110 @@ def inject_scroll_hud_graphics(enabled: bool = True):
                 parentDoc.body.appendChild(hudRoot);
             }}
 
-            if (!parentWin.__miScrollHudInitialized) {{
-                parentWin.__miScrollHudInitialized = true;
+            if (!parentWin.__miScrollHudLoopActive) {{
+                parentWin.__miScrollHudLoopActive = true;
 
-                let targetPct = 0;
+                let activeScroller = null;
                 let currentPct = 0;
-                let isDragging = false;
-
-                function getMainScrollContainer() {{
-                    const candidates = [
-                        parentDoc.querySelector('[data-testid="stAppViewContainer"]'),
-                        parentDoc.querySelector('[data-testid="stMain"]'),
-                        parentDoc.querySelector('section.main'),
-                        parentDoc.scrollingElement,
-                        parentDoc.documentElement
-                    ].filter(Boolean);
-
-                    let best = candidates[0];
-                    let maxScroll = 0;
-                    for (const el of candidates) {{
-                        const scrollable = el.scrollHeight - el.clientHeight;
-                        if (scrollable > maxScroll) {{
-                            maxScroll = scrollable;
-                            best = el;
-                        }}
-                    }}
-                    return best;
-                }}
-
-                function computeScrollPercentage() {{
-                    const el = getMainScrollContainer();
-                    if (!el) return 0;
-                    const maxScroll = Math.max(1, el.scrollHeight - el.clientHeight);
-                    const raw = (el.scrollTop / maxScroll) * 100;
-                    return Math.max(0, Math.min(100, raw));
-                }}
-
-                function scrollToPercentage(pct) {{
-                    const el = getMainScrollContainer();
-                    if (!el) return;
-                    const clamped = Math.max(0, Math.min(100, pct));
-                    const maxScroll = Math.max(1, el.scrollHeight - el.clientHeight);
-                    el.scrollTop = (clamped / 100) * maxScroll;
-                    targetPct = clamped;
-                }}
 
                 parentDoc.addEventListener(
                     "scroll",
-                    function() {{
-                        targetPct = computeScrollPercentage();
+                    function(e) {{
+                        const t = e.target;
+                        if (
+                            t &&
+                            t !== parentDoc &&
+                            t.scrollHeight > t.clientHeight + 20 &&
+                            t.clientHeight > parentWin.innerHeight * 0.45
+                        ) {{
+                            activeScroller = t;
+                        }}
                     }},
                     {{ passive: true, capture: true }}
                 );
 
-                parentWin.addEventListener(
-                    "resize",
-                    function() {{
-                        targetPct = computeScrollPercentage();
-                    }},
-                    {{ passive: true }}
-                );
-
-                // Allow clicking or dragging on the right-edge ruler to scrub the page
-                hudRoot.addEventListener("mousedown", function(e) {{
-                    isDragging = true;
-                    const rect = hudRoot.getBoundingClientRect();
-                    const clickPct = ((e.clientY - rect.top) / rect.height) * 100;
-                    scrollToPercentage(clickPct);
-                }});
-
-                parentWin.addEventListener("mousemove", function(e) {{
-                    if (!isDragging) return;
-                    const root = parentDoc.getElementById("mi-scroll-hud-root");
-                    if (!root) return;
-                    const rect = root.getBoundingClientRect();
-                    const movePct = ((e.clientY - rect.top) / rect.height) * 100;
-                    scrollToPercentage(movePct);
-                }});
-
-                parentWin.addEventListener("mouseup", function() {{
-                    isDragging = false;
-                }});
-
-                function animateHud() {{
-                    const track = parentDoc.getElementById("mi-scroll-hud-track");
-                    const pctLabel = parentDoc.getElementById("mi-scroll-hud-pct");
-                    const root = parentDoc.getElementById("mi-scroll-hud-root");
-
-                    if (track && pctLabel && root) {{
-                        targetPct = computeScrollPercentage();
-                        currentPct += (targetPct - currentPct) * 0.16;
-
-                        const indicatorY = root.clientHeight * 0.54;
-                        const translateY = indicatorY - (currentPct * PX_PER_UNIT);
-                        track.style.transform = `translate3d(0, ${{translateY.toFixed(2)}}px, 0)`;
-
-                        const rounded = Math.round(currentPct);
-                        const padded = String(rounded).padStart(3, "0");
-                        pctLabel.textContent = `${{padded}} %`;
+                function findScrollElement() {{
+                    if (
+                        activeScroller &&
+                        parentDoc.body.contains(activeScroller) &&
+                        activeScroller.scrollHeight > activeScroller.clientHeight + 10
+                    ) {{
+                        return activeScroller;
                     }}
-                    parentWin.requestAnimationFrame(animateHud);
+
+                    const selectors = [
+                        '[data-testid="stMain"]',
+                        '[data-testid="stAppViewContainer"]',
+                        'section.main',
+                        '.main',
+                        '[data-testid="stApp"]'
+                    ];
+
+                    let bestCandidate = null;
+                    let bestRange = 0;
+
+                    for (const sel of selectors) {{
+                        const el = parentDoc.querySelector(sel);
+                        if (!el) continue;
+                        const range = el.scrollHeight - el.clientHeight;
+                        if (range > 10) {{
+                            if (el.scrollTop > 0) {{
+                                activeScroller = el;
+                                return el;
+                            }}
+                            const st = parentWin.getComputedStyle(el);
+                            if (
+                                (st.overflowY === "auto" || st.overflowY === "scroll" || st.overflow === "auto") &&
+                                range > bestRange
+                            ) {{
+                                bestRange = range;
+                                bestCandidate = el;
+                            }}
+                        }}
+                    }}
+
+                    if (bestCandidate) return bestCandidate;
+                    return parentDoc.scrollingElement || parentDoc.documentElement;
                 }}
 
-                parentWin.requestAnimationFrame(animateHud);
+                function getScrollPercentage() {{
+                    const winY = parentWin.scrollY || parentWin.pageYOffset || 0;
+                    const docEl = parentDoc.scrollingElement || parentDoc.documentElement;
+                    if (winY > 0 && docEl && docEl.scrollHeight > docEl.clientHeight) {{
+                        return Math.max(0, Math.min(100, (winY / (docEl.scrollHeight - docEl.clientHeight)) * 100));
+                    }}
+
+                    const el = findScrollElement();
+                    if (!el) return 0;
+                    const maxScroll = Math.max(1, el.scrollHeight - el.clientHeight);
+                    const pct = (el.scrollTop / maxScroll) * 100;
+                    return Math.max(0, Math.min(100, pct));
+                }}
+
+                function renderLoop() {{
+                    const root = parentDoc.getElementById("mi-scroll-hud-root");
+                    const track = parentDoc.getElementById("mi-scroll-hud-track");
+                    const indicator = parentDoc.getElementById("mi-scroll-hud-indicator");
+                    const pctLabel = parentDoc.getElementById("mi-scroll-hud-pct");
+
+                    if (root && track && indicator && pctLabel) {{
+                        const targetPct = getScrollPercentage();
+                        currentPct += (targetPct - currentPct) * 0.18;
+
+                        const vh = root.clientHeight;
+                        const indicatorY = vh * (0.28 + 0.46 * (currentPct / 100.0));
+                        indicator.style.top = `${{indicatorY.toFixed(2)}}px`;
+
+                        const trackY = indicatorY - (currentPct * PX_PER_UNIT);
+                        track.style.transform = `translate3d(0, ${{trackY.toFixed(2)}}px, 0)`;
+
+                        const displayNum = String(Math.round(currentPct)).padStart(3, "0");
+                        pctLabel.textContent = `${{displayNum}} %`;
+                    }}
+                    parentWin.requestAnimationFrame(renderLoop);
+                }}
+
+                parentWin.requestAnimationFrame(renderLoop);
             }}
         }})();
         </script>
@@ -613,7 +612,6 @@ def find_matching_column_indices(headers: list[str]) -> dict:
     """
     col_idx_map = {}
 
-    # Pass 1: Exact match for ವಿಭಾಗ and ಉಪವಿಭಾಗ
     for idx, col in enumerate(headers):
         norm_col = normalize_text(col)
         compact_col = re.sub(r"[\s\-_]+", "", norm_col)
@@ -625,7 +623,6 @@ def find_matching_column_indices(headers: list[str]) -> dict:
         ):
             col_idx_map["subdivision"] = idx
 
-    # Pass 2: Flexible substring matching
     for idx, col in enumerate(headers):
         norm_col = normalize_text(col)
         upper_col = norm_col.upper()
@@ -1225,11 +1222,8 @@ show_unassigned_bar = st.sidebar.checkbox(
 show_scroll_hud = st.sidebar.checkbox(
     "Show Right-Edge Scroll HUD Ruler",
     value=True,
-    help="Displays the animated scrolling ruler and live percentage indicator along the right edge.",
+    help="Displays the transparent scrolling ruler and glowing blue percentage indicator over the right edge.",
 )
-
-# Inject the scrolling HUD graphics from the video
-inject_scroll_hud_graphics(enabled=show_scroll_hud)
 
 # -----------------------------------------------------------------------------
 # MAIN UI & THREAD-SAFE DATA LOADING
@@ -1918,3 +1912,6 @@ if selected_officer:
 
 with st.expander("🔍 Inspect Worksheet Loading Status (23 Target Sheets)"):
     st.dataframe(diag_df, use_container_width=True)
+
+# Mount the transparent right-edge scrolling HUD overlay
+inject_scroll_hud_graphics(enabled=show_scroll_hud)
