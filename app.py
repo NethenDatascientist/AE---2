@@ -27,12 +27,12 @@ st.set_page_config(
 st.markdown(
     """
     <style>
-        /* Full-width practical layout with room for the 26px half-width right scroller */
+        /* Full width main container — content extends behind the transparent scroller */
         .block-container {
             max-width: 100% !important;
-            padding-left: 1.2rem !important;
-            padding-right: 2.1rem !important;
-            padding-top: 2.3rem !important;
+            padding-left: 1.1rem !important;
+            padding-right: 0.8rem !important;
+            padding-top: 2.4rem !important;
             padding-bottom: 2rem !important;
         }
         [data-testid="stPlotlyChart"] {
