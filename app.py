@@ -27,23 +27,25 @@ st.set_page_config(
 st.markdown(
     """
     <style>
-        /* Full width main container */
+        /* Full-width practical layout with room for the 26px half-width right scroller */
         .block-container {
             max-width: 100% !important;
-            padding-left: 1.1rem !important;
-            padding-right: 1.6rem !important;
-            padding-top: 2.6rem !important;
+            padding-left: 1.2rem !important;
+            padding-right: 2.1rem !important;
+            padding-top: 2.3rem !important;
             padding-bottom: 2rem !important;
         }
         [data-testid="stPlotlyChart"] {
             width: 100% !important;
         }
 
-        /* 1. Narrower Left Sidebar (as marked in Screenshot 1) */
+        /* 1. Narrower, Sleek Left Sidebar */
         section[data-testid="stSidebar"][aria-expanded="true"] {
             width: 235px !important;
             min-width: 235px !important;
             max-width: 235px !important;
+            background: linear-gradient(180deg, rgba(15, 23, 42, 0.98) 0%, rgba(15, 23, 42, 0.92) 100%) !important;
+            border-right: 1px solid rgba(148, 163, 184, 0.14) !important;
         }
         section[data-testid="stSidebar"] > div:first-child {
             padding-top: 1rem !important;
@@ -52,10 +54,10 @@ st.markdown(
         }
         section[data-testid="stSidebar"] .stMarkdown p,
         section[data-testid="stSidebar"] label {
-            font-size: 0.84rem !important;
+            font-size: 0.83rem !important;
         }
 
-        /* 2. Always-Visible, Better Sidebar Close (<<) & Open (>>) Button (Screenshot 3) */
+        /* 2. Always-Visible Sidebar Collapse (<<) & Expand (>>) Button */
         [data-testid="stSidebarCollapseButton"],
         [data-testid="collapsedControl"],
         [data-testid="stExpandSidebarButton"] {
@@ -97,19 +99,89 @@ st.markdown(
             height: 1.25rem !important;
         }
 
-        /* Breathing room inside the top control cards */
+        /* 3. Stylish & Practical Top Filter Control Cards */
         div[data-testid="stVerticalBlockBorderWrapper"] {
-            border-radius: 10px !important;
-            padding: 0.35rem 0.5rem !important;
-            background-color: rgba(148, 163, 184, 0.05);
+            border-radius: 12px !important;
+            padding: 0.45rem 0.65rem !important;
+            background: linear-gradient(145deg, rgba(30, 41, 59, 0.48), rgba(15, 23, 42, 0.68)) !important;
+            border: 1px solid rgba(148, 163, 184, 0.18) !important;
+            box-shadow: 0 4px 14px rgba(0, 0, 0, 0.22) !important;
+            transition: border-color 0.2s ease, box-shadow 0.2s ease !important;
+        }
+        div[data-testid="stVerticalBlockBorderWrapper"]:hover {
+            border-color: rgba(59, 130, 246, 0.45) !important;
+            box-shadow: 0 6px 18px rgba(37, 99, 235, 0.14) !important;
         }
         div[role="radiogroup"] {
-            gap: 0.55rem !important;
-            padding-top: 0.25rem !important;
+            gap: 0.45rem !important;
+            padding-top: 0.2rem !important;
         }
+
+        /* 4. Stylish KPI Metric Cards with Color Accents */
+        div[data-testid="stMetric"] {
+            background: linear-gradient(145deg, rgba(30, 41, 59, 0.55), rgba(15, 23, 42, 0.78)) !important;
+            border: 1px solid rgba(148, 163, 184, 0.16) !important;
+            border-top: 3px solid #3B82F6 !important;
+            border-radius: 12px !important;
+            padding: 0.65rem 0.9rem !important;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2) !important;
+        }
+        div[data-testid="stHorizontalBlock"] > div:nth-child(2) div[data-testid="stMetric"] {
+            border-top-color: #818CF8 !important;
+        }
+        div[data-testid="stHorizontalBlock"] > div:nth-child(3) div[data-testid="stMetric"] {
+            border-top-color: #38BDF8 !important;
+        }
+        div[data-testid="stHorizontalBlock"] > div:nth-child(4) div[data-testid="stMetric"] {
+            border-top-color: #EF4444 !important;
+            background: linear-gradient(145deg, rgba(69, 10, 10, 0.28), rgba(15, 23, 42, 0.82)) !important;
+        }
+        div[data-testid="stHorizontalBlock"] > div:nth-child(5) div[data-testid="stMetric"] {
+            border-top-color: #4ADE80 !important;
+            background: linear-gradient(145deg, rgba(6, 78, 59, 0.24), rgba(15, 23, 42, 0.82)) !important;
+        }
+        div[data-testid="stMetricValue"] {
+            font-size: 1.65rem !important;
+            font-weight: 700 !important;
+            letter-spacing: -0.3px !important;
+        }
+        div[data-testid="stMetricLabel"] {
+            font-size: 0.82rem !important;
+            color: #CBD5E1 !important;
+        }
+
+        /* Status Bar Banner */
+        .mi-status-bar {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 0.6rem 1.1rem;
+            padding: 0.45rem 0.85rem;
+            margin-top: -0.35rem;
+            margin-bottom: 0.85rem;
+            border-radius: 10px;
+            background: rgba(30, 41, 59, 0.45);
+            border: 1px solid rgba(148, 163, 184, 0.14);
+            font-size: 0.82rem;
+            color: #CBD5E1;
+        }
+        .mi-status-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+            padding: 0.15rem 0.55rem;
+            border-radius: 999px;
+            background: rgba(59, 130, 246, 0.15);
+            border: 1px solid rgba(59, 130, 246, 0.35);
+            color: #93C5FD;
+            font-weight: 600;
+            font-size: 0.78rem;
+        }
+
         hr {
-            margin-top: 0.35rem !important;
-            margin-bottom: 0.45rem !important;
+            margin-top: 0.55rem !important;
+            margin-bottom: 0.65rem !important;
+            border-color: rgba(148, 163, 184, 0.15) !important;
         }
     </style>
     """,
@@ -118,14 +190,13 @@ st.markdown(
 
 
 # -----------------------------------------------------------------------------
-# COMPACT OVERLAY SCROLL HUD WITH ANIMATED SECTION WRITING (FROM VIDEO)
+# HALF-WIDTH (26px), LINE-FREE, TEXT-FREE RIGHT-EDGE SCROLL RULER HUD
 # -----------------------------------------------------------------------------
 def inject_scroll_hud_graphics(enabled: bool = True):
     """
-    Injects a compact, line-free right-edge scrolling ruler overlay with
-    animated vertical section titles ("Overdue , ETS & Total Works Bar chart",
-    "Officer-Wise Summary Table", "Overdue Works full details") that slide
-    and highlight along the ruler just like the reference video.
+    Injects a half-width (26px), line-free, writing-free right-edge scrolling
+    ruler overlay. Always replaces any cached style/DOM nodes in window.parent
+    so old borders or vertical text never persist.
     """
     components.html(
         f"""
@@ -135,163 +206,115 @@ def inject_scroll_hud_graphics(enabled: bool = True):
             const parentWin = window.parent;
             const isEnabled = {str(enabled).lower()};
 
+            // Always remove previous HUD DOM & cached <style> so old borders/writings are wiped immediately
             const oldHud = parentDoc.getElementById("mi-scroll-hud-root");
+            if (oldHud) oldHud.remove();
+
             const oldStyle = parentDoc.getElementById("mi-scroll-hud-style");
+            if (oldStyle) oldStyle.remove();
 
             if (!isEnabled) {{
-                if (oldHud) oldHud.remove();
-                if (oldStyle) oldStyle.remove();
                 return;
             }}
 
-            if (!oldStyle) {{
-                const style = parentDoc.createElement("style");
-                style.id = "mi-scroll-hud-style";
-                style.innerHTML = `
-                    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@600;700;800&family=JetBrains+Mono:wght@500;700&display=swap');
+            const style = parentDoc.createElement("style");
+            style.id = "mi-scroll-hud-style";
+            style.innerHTML = `
+                @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;700&display=swap');
 
-                    #mi-scroll-hud-root {{
-                        position: fixed;
-                        top: 0;
-                        right: 0;
-                        width: 54px; /* Narrow compact width as marked in Screenshot 1 */
-                        height: 100vh;
-                        z-index: 999990;
-                        pointer-events: none; /* Pure non-intrusive overlay */
-                        user-select: none;
-                        overflow: hidden;
-                        background: transparent !important;
-                        border: none !important; /* No long vertical line */
-                        font-family: 'JetBrains Mono', 'Courier New', monospace;
-                    }}
+                #mi-scroll-hud-root {{
+                    position: fixed !important;
+                    top: 0 !important;
+                    right: 0 !important;
+                    width: 26px !important; /* Half width (26px) */
+                    height: 100vh !important;
+                    z-index: 999990 !important;
+                    pointer-events: none !important;
+                    user-select: none !important;
+                    overflow: hidden !important;
+                    background: transparent !important;
+                    border: none !important;
+                    border-left: none !important;
+                    outline: none !important;
+                    box-shadow: none !important;
+                    font-family: 'JetBrains Mono', monospace !important;
+                }}
 
-                    /* Sliding ruler track */
-                    #mi-scroll-hud-track {{
-                        position: absolute;
-                        top: 0;
-                        left: 0;
-                        width: 100%;
-                        will-change: transform;
-                        pointer-events: none;
-                    }}
+                #mi-scroll-hud-track {{
+                    position: absolute !important;
+                    top: 0 !important;
+                    left: 0 !important;
+                    width: 100% !important;
+                    will-change: transform;
+                    pointer-events: none !important;
+                    border: none !important;
+                    background: transparent !important;
+                }}
 
-                    .mi-hud-tick {{
-                        position: absolute;
-                        right: 0;
-                        display: flex;
-                        align-items: center;
-                        justify-content: flex-end;
-                        transform: translateY(-50%);
-                    }}
+                .mi-hud-tick {{
+                    position: absolute;
+                    right: 0;
+                    display: flex;
+                    align-items: center;
+                    justify-content: flex-end;
+                    transform: translateY(-50%);
+                }}
 
-                    .mi-hud-tick-label {{
-                        font-size: 10px;
-                        font-weight: 600;
-                        color: rgba(226, 232, 240, 0.52);
-                        margin-right: 5px;
-                        letter-spacing: 0.3px;
-                        text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
-                    }}
+                .mi-hud-tick-label {{
+                    font-size: 8.5px;
+                    font-weight: 600;
+                    color: rgba(226, 232, 240, 0.45);
+                    margin-right: 3px;
+                    letter-spacing: 0px;
+                    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9);
+                }}
 
-                    .mi-hud-tick-line-major {{
-                        width: 12px;
-                        height: 1.5px;
-                        background: rgba(226, 232, 240, 0.58);
-                    }}
+                .mi-hud-tick-line-major {{
+                    width: 8px;
+                    height: 1.5px;
+                    background: rgba(226, 232, 240, 0.52);
+                }}
 
-                    .mi-hud-tick-line-mid {{
-                        width: 7px;
-                        height: 1px;
-                        background: rgba(226, 232, 240, 0.30);
-                    }}
+                .mi-hud-tick-line-mid {{
+                    width: 5px;
+                    height: 1px;
+                    background: rgba(226, 232, 240, 0.26);
+                }}
 
-                    /* Vertical section writing along the ruler track (matches video) */
-                    .mi-hud-section-Node {{
-                        position: absolute;
-                        right: 22px;
-                        transform: translateY(-50%) rotate(180deg);
-                        writing-mode: vertical-rl;
-                        text-orientation: mixed;
-                        white-space: nowrap;
-                        font-family: 'Inter', sans-serif;
-                        font-size: 10.5px;
-                        font-weight: 700;
-                        letter-spacing: 1.6px;
-                        text-transform: uppercase;
-                        color: rgba(148, 163, 184, 0.32);
-                        text-shadow: 0 1px 4px rgba(0, 0, 0, 0.85);
-                        transition: color 0.35s ease, opacity 0.35s ease, text-shadow 0.35s ease, transform 0.35s cubic-bezier(0.22, 1, 0.36, 1);
-                        pointer-events: none;
-                    }}
+                /* Compact glowing blue horizontal indicator bar & percentage */
+                #mi-scroll-hud-indicator {{
+                    position: absolute;
+                    right: 0;
+                    width: 24px;
+                    top: 50%;
+                    transform: translateY(-1px);
+                    pointer-events: none;
+                    z-index: 6;
+                }}
 
-                    .mi-hud-section-Node.active-section {{
-                        color: rgba(226, 232, 240, 0.82);
-                        text-shadow: 0 0 10px rgba(59, 130, 246, 0.55), 0 1px 4px rgba(0, 0, 0, 0.95);
-                    }}
+                #mi-scroll-hud-blue-line {{
+                    width: 100%;
+                    height: 2px;
+                    background: linear-gradient(90deg, rgba(59, 130, 246, 0.15) 0%, #3B82F6 45%, #93C5FD 100%);
+                    box-shadow: 0 0 7px rgba(59, 130, 246, 0.95), 0 0 12px rgba(37, 99, 235, 0.65);
+                }}
 
-                    /* Glowing blue horizontal indicator bar & '026 %' readout */
-                    #mi-scroll-hud-indicator {{
-                        position: absolute;
-                        left: 0;
-                        right: 0;
-                        top: 50%;
-                        transform: translateY(-1px);
-                        pointer-events: none;
-                        z-index: 6;
-                    }}
-
-                    #mi-scroll-hud-blue-line {{
-                        width: 100%;
-                        height: 2px;
-                        background: linear-gradient(90deg, rgba(29, 78, 216, 0.2) 0%, #3B82F6 40%, #93C5FD 100%);
-                        box-shadow: 0 0 8px rgba(59, 130, 246, 0.95), 0 0 16px rgba(37, 99, 235, 0.70);
-                    }}
-
-                    #mi-scroll-hud-pct {{
-                        margin-top: 4px;
-                        padding-right: 4px;
-                        text-align: right;
-                        font-size: 10.5px;
-                        font-weight: 700;
-                        letter-spacing: 0.8px;
-                        color: #93C5FD;
-                        text-shadow: 0 0 8px rgba(59, 130, 246, 0.95), 0 1px 3px rgba(0, 0, 0, 0.95);
-                    }}
-
-                    /* Active Topic Floating Vertical Label attached to the scroller indicator */
-                    #mi-scroll-hud-active-topic {{
-                        position: absolute;
-                        right: 22px;
-                        top: 26px;
-                        transform: rotate(180deg);
-                        writing-mode: vertical-rl;
-                        white-space: nowrap;
-                        font-family: 'Inter', sans-serif;
-                        font-size: 10.5px;
-                        font-weight: 800;
-                        letter-spacing: 1.5px;
-                        text-transform: uppercase;
-                        color: #93C5FD;
-                        text-shadow: 0 0 10px rgba(59, 130, 246, 0.75), 0 1px 4px rgba(0, 0, 0, 0.95);
-                        opacity: 0.92;
-                        transition: opacity 0.28s ease, transform 0.32s cubic-bezier(0.22, 1, 0.36, 1), color 0.28s ease;
-                        pointer-events: none;
-                    }}
-
-                    #mi-scroll-hud-active-topic.topic-switching {{
-                        opacity: 0;
-                        transform: rotate(180deg) translateY(-10px);
-                    }}
-                `;
-                parentDoc.head.appendChild(style);
-            }}
+                #mi-scroll-hud-pct {{
+                    margin-top: 3px;
+                    padding-right: 2px;
+                    text-align: right;
+                    font-size: 8.5px;
+                    font-weight: 700;
+                    letter-spacing: 0.2px;
+                    color: #93C5FD;
+                    text-shadow: 0 0 6px rgba(59, 130, 246, 0.95), 0 1px 2px rgba(0, 0, 0, 0.95);
+                }}
+            `;
+            parentDoc.head.appendChild(style);
 
             const PX_PER_UNIT = 42;
 
-            let hudRoot = parentDoc.getElementById("mi-scroll-hud-root");
-            if (hudRoot) hudRoot.remove(); // Rebuild cleanly on rerun
-
-            hudRoot = parentDoc.createElement("div");
+            const hudRoot = parentDoc.createElement("div");
             hudRoot.id = "mi-scroll-hud-root";
 
             let ticksHtml = "";
@@ -315,38 +338,20 @@ def inject_scroll_hud_graphics(enabled: bool = True):
                 }}
             }}
 
-            // Sliding vertical section labels along the ruler track
-            const sectionTrackNodesHtml = `
-                <div class="mi-hud-section-Node" id="mi-track-sec-0" style="top: ${{22 * PX_PER_UNIT}}px;">
-                    Overdue , ETS &amp; Total Works Bar chart
-                </div>
-                <div class="mi-hud-section-Node" id="mi-track-sec-1" style="top: ${{72 * PX_PER_UNIT}}px;">
-                    Officer-Wise Summary Table
-                </div>
-                <div class="mi-hud-section-Node" id="mi-track-sec-2" style="top: ${{92 * PX_PER_UNIT}}px;">
-                    Overdue Works full details
-                </div>
-            `;
-
             hudRoot.innerHTML = `
                 <div id="mi-scroll-hud-track">
                     ${{ticksHtml}}
-                    ${{sectionTrackNodesHtml}}
                 </div>
                 <div id="mi-scroll-hud-indicator">
                     <div id="mi-scroll-hud-blue-line"></div>
-                    <div id="mi-scroll-hud-pct">000 %</div>
-                    <div id="mi-scroll-hud-active-topic">Overdue , ETS &amp; Total Works Bar chart</div>
+                    <div id="mi-scroll-hud-pct">000%</div>
                 </div>
             `;
             parentDoc.body.appendChild(hudRoot);
 
-            if (!parentWin.__miScrollHudLoopV2) {{
-                parentWin.__miScrollHudLoopV2 = true;
-
-                let activeScroller = null;
-                let currentPct = 0;
-                let lastTopicText = "";
+            if (!parentWin.__miScrollHudListenerAttached) {{
+                parentWin.__miScrollHudListenerAttached = true;
+                parentWin.__miActiveScroller = null;
 
                 parentDoc.addEventListener(
                     "scroll",
@@ -358,170 +363,105 @@ def inject_scroll_hud_graphics(enabled: bool = True):
                             t.scrollHeight > t.clientHeight + 20 &&
                             t.clientHeight > parentWin.innerHeight * 0.45
                         ) {{
-                            activeScroller = t;
+                            parentWin.__miActiveScroller = t;
                         }}
                     }},
                     {{ passive: true, capture: true }}
                 );
+            }}
 
-                function findScrollElement() {{
-                    if (
-                        activeScroller &&
-                        parentDoc.body.contains(activeScroller) &&
-                        activeScroller.scrollHeight > activeScroller.clientHeight + 10
-                    ) {{
-                        return activeScroller;
-                    }}
-
-                    const selectors = [
-                        '[data-testid="stMain"]',
-                        '[data-testid="stAppViewContainer"]',
-                        'section.main',
-                        '.main',
-                        '[data-testid="stApp"]'
-                    ];
-
-                    let bestCandidate = null;
-                    let bestRange = 0;
-
-                    for (const sel of selectors) {{
-                        const el = parentDoc.querySelector(sel);
-                        if (!el) continue;
-                        const range = el.scrollHeight - el.clientHeight;
-                        if (range > 10) {{
-                            if (el.scrollTop > 0) {{
-                                activeScroller = el;
-                                return el;
-                            }}
-                            const st = parentWin.getComputedStyle(el);
-                            if (
-                                (st.overflowY === "auto" || st.overflowY === "scroll" || st.overflow === "auto") &&
-                                range > bestRange
-                            ) {{
-                                bestRange = range;
-                                bestCandidate = el;
-                            }}
-                        }}
-                    }}
-
-                    if (bestCandidate) return bestCandidate;
-                    return parentDoc.scrollingElement || parentDoc.documentElement;
+            function findScrollElement() {{
+                const activeScroller = parentWin.__miActiveScroller;
+                if (
+                    activeScroller &&
+                    parentDoc.body.contains(activeScroller) &&
+                    activeScroller.scrollHeight > activeScroller.clientHeight + 10
+                ) {{
+                    return activeScroller;
                 }}
 
-                function getScrollPercentage() {{
-                    const winY = parentWin.scrollY || parentWin.pageYOffset || 0;
-                    const docEl = parentDoc.scrollingElement || parentDoc.documentElement;
-                    if (winY > 0 && docEl && docEl.scrollHeight > docEl.clientHeight) {{
-                        return Math.max(0, Math.min(100, (winY / (docEl.scrollHeight - docEl.clientHeight)) * 100));
-                    }}
+                const selectors = [
+                    '[data-testid="stMain"]',
+                    '[data-testid="stAppViewContainer"]',
+                    'section.main',
+                    '.main',
+                    '[data-testid="stApp"]'
+                ];
 
-                    const el = findScrollElement();
-                    if (!el) return 0;
-                    const maxScroll = Math.max(1, el.scrollHeight - el.clientHeight);
-                    const pct = (el.scrollTop / maxScroll) * 100;
-                    return Math.max(0, Math.min(100, pct));
+                let bestCandidate = null;
+                let bestRange = 0;
+
+                for (const sel of selectors) {{
+                    const el = parentDoc.querySelector(sel);
+                    if (!el) continue;
+                    const range = el.scrollHeight - el.clientHeight;
+                    if (range > 10) {{
+                        if (el.scrollTop > 0) {{
+                            parentWin.__miActiveScroller = el;
+                            return el;
+                        }}
+                        const st = parentWin.getComputedStyle(el);
+                        if (
+                            (st.overflowY === "auto" || st.overflowY === "scroll" || st.overflow === "auto") &&
+                            range > bestRange
+                        ) {{
+                            bestRange = range;
+                            bestCandidate = el;
+                        }}
+                    }}
                 }}
 
-                function detectCurrentSectionAndSyncTrack() {{
-                    const el = findScrollElement();
-                    const maxScroll = el ? Math.max(1, el.scrollHeight - el.clientHeight) : 1;
-                    const scrollTop = el ? el.scrollTop : 0;
-                    const vh = parentWin.innerHeight || 800;
+                if (bestCandidate) return bestCandidate;
+                return parentDoc.scrollingElement || parentDoc.documentElement;
+            }}
 
-                    const secBar = parentDoc.getElementById("mi-sec-barchart");
-                    const secTable = parentDoc.getElementById("mi-sec-summary");
-                    const secDetails = parentDoc.getElementById("mi-sec-details");
-
-                    const track0 = parentDoc.getElementById("mi-track-sec-0");
-                    const track1 = parentDoc.getElementById("mi-track-sec-1");
-                    const track2 = parentDoc.getElementById("mi-track-sec-2");
-
-                    let activeIdx = 0;
-                    const triggerLineY = vh * 0.48;
-
-                    if (secTable) {{
-                        const rTable = secTable.getBoundingClientRect();
-                        if (rTable.top <= triggerLineY) activeIdx = 1;
-                        // Position track node at actual section scroll percentage
-                        if (track1) {{
-                            const tableDocTop = rTable.top + scrollTop;
-                            const tablePct = Math.max(15, Math.min(90, (tableDocTop / maxScroll) * 100));
-                            track1.style.top = `${{(tablePct * PX_PER_UNIT).toFixed(1)}}px`;
-                        }}
-                    }}
-
-                    if (secDetails) {{
-                        const rDetails = secDetails.getBoundingClientRect();
-                        if (rDetails.top <= triggerLineY) activeIdx = 2;
-                        if (track2) {{
-                            const detailsDocTop = rDetails.top + scrollTop;
-                            const detailsPct = Math.max(25, Math.min(97, (detailsDocTop / maxScroll) * 100));
-                            track2.style.top = `${{(detailsPct * PX_PER_UNIT).toFixed(1)}}px`;
-                        }}
-                    }}
-
-                    if (secBar && track0) {{
-                        const rBar = secBar.getBoundingClientRect();
-                        const barDocTop = Math.max(0, rBar.top + scrollTop);
-                        const barPct = Math.max(8, Math.min(45, ((barDocTop + 260) / maxScroll) * 100));
-                        track0.style.top = `${{(barPct * PX_PER_UNIT).toFixed(1)}}px`;
-                    }}
-
-                    const nodes = [track0, track1, track2];
-                    nodes.forEach((node, idx) => {{
-                        if (!node) return;
-                        if (idx === activeIdx) {{
-                            node.classList.add("active-section");
-                        }} else {{
-                            node.classList.remove("active-section");
-                        }}
-                    }});
-
-                    const titles = [
-                        "Overdue , ETS & Total Works Bar chart",
-                        "Officer-Wise Summary Table",
-                        "Overdue Works full details"
-                    ];
-                    return titles[activeIdx];
+            function getScrollPercentage() {{
+                const winY = parentWin.scrollY || parentWin.pageYOffset || 0;
+                const docEl = parentDoc.scrollingElement || parentDoc.documentElement;
+                if (winY > 0 && docEl && docEl.scrollHeight > docEl.clientHeight) {{
+                    return Math.max(0, Math.min(100, (winY / (docEl.scrollHeight - docEl.clientHeight)) * 100));
                 }}
 
-                function renderLoop() {{
-                    const root = parentDoc.getElementById("mi-scroll-hud-root");
-                    const track = parentDoc.getElementById("mi-scroll-hud-track");
-                    const indicator = parentDoc.getElementById("mi-scroll-hud-indicator");
-                    const pctLabel = parentDoc.getElementById("mi-scroll-hud-pct");
-                    const topicEl = parentDoc.getElementById("mi-scroll-hud-active-topic");
+                const el = findScrollElement();
+                if (!el) return 0;
+                const maxScroll = Math.max(1, el.scrollHeight - el.clientHeight);
+                const pct = (el.scrollTop / maxScroll) * 100;
+                return Math.max(0, Math.min(100, pct));
+            }}
 
-                    if (root && track && indicator && pctLabel) {{
-                        const targetPct = getScrollPercentage();
-                        currentPct += (targetPct - currentPct) * 0.18;
+            parentWin.__miCurrentPct = parentWin.__miCurrentPct || 0;
 
-                        const vh = root.clientHeight;
-                        const indicatorY = vh * (0.24 + 0.50 * (currentPct / 100.0));
-                        indicator.style.top = `${{indicatorY.toFixed(2)}}px`;
+            parentWin.__miHudStepFn = function() {{
+                const root = parentDoc.getElementById("mi-scroll-hud-root");
+                const track = parentDoc.getElementById("mi-scroll-hud-track");
+                const indicator = parentDoc.getElementById("mi-scroll-hud-indicator");
+                const pctLabel = parentDoc.getElementById("mi-scroll-hud-pct");
 
-                        const trackY = indicatorY - (currentPct * PX_PER_UNIT);
-                        track.style.transform = `translate3d(0, ${{trackY.toFixed(2)}}px, 0)`;
+                if (root && track && indicator && pctLabel) {{
+                    const targetPct = getScrollPercentage();
+                    parentWin.__miCurrentPct += (targetPct - parentWin.__miCurrentPct) * 0.18;
 
-                        const displayNum = String(Math.round(currentPct)).padStart(3, "0");
-                        pctLabel.textContent = `${{displayNum}} %`;
+                    const vh = root.clientHeight;
+                    const indicatorY = vh * (0.24 + 0.52 * (parentWin.__miCurrentPct / 100.0));
+                    indicator.style.top = `${{indicatorY.toFixed(2)}}px`;
 
-                        const currentTopic = detectCurrentSectionAndSyncTrack();
-                        if (topicEl && currentTopic !== lastTopicText) {{
-                            lastTopicText = currentTopic;
-                            topicEl.classList.add("topic-switching");
-                            setTimeout(() => {{
-                                if (topicEl) {{
-                                    topicEl.textContent = currentTopic;
-                                    topicEl.classList.remove("topic-switching");
-                                }}
-                            }}, 140);
-                        }}
-                    }}
-                    parentWin.requestAnimationFrame(renderLoop);
+                    const trackY = indicatorY - (parentWin.__miCurrentPct * PX_PER_UNIT);
+                    track.style.transform = `translate3d(0, ${{trackY.toFixed(2)}}px, 0)`;
+
+                    const displayNum = String(Math.round(parentWin.__miCurrentPct)).padStart(3, "0");
+                    pctLabel.textContent = `${{displayNum}}%`;
                 }}
+            }};
 
-                parentWin.requestAnimationFrame(renderLoop);
+            if (!parentWin.__miScrollHudLoopRunning) {{
+                parentWin.__miScrollHudLoopRunning = true;
+                function loop() {{
+                    if (parentWin.__miHudStepFn) {{
+                        parentWin.__miHudStepFn();
+                    }}
+                    parentWin.requestAnimationFrame(loop);
+                }}
+                parentWin.requestAnimationFrame(loop);
             }}
         }})();
         </script>
@@ -1376,7 +1316,7 @@ show_unassigned_bar = st.sidebar.checkbox(
 show_scroll_hud = st.sidebar.checkbox(
     "Show Right-Edge Scroll HUD Ruler",
     value=True,
-    help="Displays the transparent scrolling ruler and animated section labels on the right edge.",
+    help="Displays the ultra-slim 26px scrolling ruler on the right edge.",
 )
 
 # -----------------------------------------------------------------------------
@@ -1431,18 +1371,21 @@ elif (
 
 master_df, overdue_full_df, diag_df, today_str = shared_state["data"]
 
-st.caption(
-    f"⚡ **Data Source:** {shared_state['source_label']} &nbsp;|&nbsp; "
-    f"**Last Synced:** {shared_state['last_synced']} IST &nbsp;|&nbsp; "
-    f"*(Row Count Rule: Rows with valid text in **'{COL_DIV}'** column — empty **'{COL_SUBDIV}'** rows are also included)*"
+st.markdown(
+    f"""
+    <div class="mi-status-bar">
+        <span class="mi-status-pill">⚡ {shared_state['source_label']}</span>
+        <span>🕒 <b>Last Synced:</b> {shared_state['last_synced']} IST</span>
+        <span>📌 <b>Row Rule:</b> Valid text in <b>'{COL_DIV}'</b> column (empty <b>'{COL_SUBDIV}'</b> rows included)</span>
+    </div>
+    """,
+    unsafe_allow_html=True,
 )
 
 if master_df.empty:
     st.warning("No matching data rows were found across the target worksheets.")
     st.dataframe(diag_df, use_container_width=True)
     st.stop()
-
-st.markdown("<div style='margin-top: 0.9rem;'></div>", unsafe_allow_html=True)
 
 # -----------------------------------------------------------------------------
 # TOP CONTROLS: 4 SPACED-OUT BORDERED CARDS (ವಿಭಾಗ, ಉಪವಿಭಾಗ, OFFICER VIEW, SORT)
@@ -1518,7 +1461,7 @@ with ctrl_col4:
             horizontal=False,
         )
 
-st.markdown("<div style='margin-top: 0.6rem;'></div>", unsafe_allow_html=True)
+st.markdown("<div style='margin-top: 0.45rem;'></div>", unsafe_allow_html=True)
 
 st.sidebar.markdown(
     f"**Active {COL_DIV}:** `{selected_division}`\n\n"
@@ -1586,7 +1529,7 @@ else:
     ).reset_index(drop=True)
 
 # -----------------------------------------------------------------------------
-# KPI SUMMARY METRICS (5 COLUMNS, REDUCED BOTTOM GAP)
+# KPI SUMMARY METRIC CARDS (5 COLUMNS)
 # -----------------------------------------------------------------------------
 total_assigned_all = int(summary_df["total_works"].sum())
 total_overdue_all = int(summary_df["overdue_works"].sum())
@@ -1616,7 +1559,7 @@ filter_scope_label = (
     f"{COL_DIV}: {div_badge} | {COL_SUBDIV}: {subdiv_badge}"
 )
 
-k1, k2, k3, k4, k5 = st.columns([1.15, 1.0, 1.05, 1.35, 1.0], gap="medium")
+k1, k2, k3, k4, k5 = st.columns([1.1, 1.0, 1.05, 1.35, 1.0], gap="medium")
 k1.metric("📅 Date (Today)", today_str)
 k2.metric(
     "👥 Officers",
@@ -1635,7 +1578,6 @@ st.divider()
 # -----------------------------------------------------------------------------
 # SECTION 1: HORIZONTAL BAR CHART (WIDER BAR USAGE ACROSS SCREEN)
 # -----------------------------------------------------------------------------
-st.markdown('<div id="mi-sec-barchart"></div>', unsafe_allow_html=True)
 st.subheader(
     f"📈 Overdue & ETS Works by {view_choice} — [{filter_scope_label}] ({sort_choice})"
 )
@@ -1874,7 +1816,6 @@ else:
             )
         )
 
-        # Tighter multiplier so bars stretch wider across the screen (Screenshot 2)
         max_x = max(float(plot_df["vis_total"].max()), 1.0)
         x_range_max = max_x * 1.24
         x_axis_title = "Number of Works"
@@ -1885,11 +1826,14 @@ else:
         barmode="overlay",
         height=chart_height,
         bargap=0.22,
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(15, 23, 42, 0.35)",
         xaxis=dict(
             title=x_axis_title,
             range=[0, x_range_max],
-            gridcolor="rgba(200, 200, 200, 0.2)",
+            gridcolor="rgba(148, 163, 184, 0.14)",
             zeroline=True,
+            zerolinecolor="rgba(148, 163, 184, 0.3)",
         ),
         yaxis=dict(
             title="",
@@ -1907,7 +1851,7 @@ else:
             x=0,
             traceorder="reversed",
         ),
-        margin=dict(l=210, r=14, t=35, b=40),
+        margin=dict(l=210, r=10, t=35, b=40),
     )
 
     st.plotly_chart(fig, use_container_width=True)
@@ -1915,7 +1859,6 @@ else:
 # -----------------------------------------------------------------------------
 # SECTION 2: DETAILED SUMMARY TABLE (FILTERED BY ವಿಭಾಗ & ಉಪವಿಭಾಗ)
 # -----------------------------------------------------------------------------
-st.markdown('<div id="mi-sec-summary"></div>', unsafe_allow_html=True)
 st.subheader(f"📋 Officer-Wise Summary Table — [{filter_scope_label}]")
 
 display_table = summary_df[
@@ -1950,7 +1893,6 @@ st.divider()
 # -----------------------------------------------------------------------------
 # SECTION 3: OFFICER DROPDOWN & COMBINED OVERDUE WORKS FULL DETAILS + DOWNLOAD
 # -----------------------------------------------------------------------------
-st.markdown('<div id="mi-sec-details"></div>', unsafe_allow_html=True)
 st.subheader(
     f"📂 ಅಧಿಕಾರಿಗಳ ವಾರು ಅವಧಿ ಮೀರಿದ ಕಾಮಗಾರಿಗಳ ವಿವರ / Combined Overdue Works by {view_choice} — [{filter_scope_label}]"
 )
@@ -2070,5 +2012,5 @@ if selected_officer:
 with st.expander("🔍 Inspect Worksheet Loading Status (23 Target Sheets)"):
     st.dataframe(diag_df, use_container_width=True)
 
-# Mount the compact right-edge scrolling HUD overlay
+# Mount the ultra-slim 26px right-edge scrolling HUD overlay (no border line, no writings)
 inject_scroll_hud_graphics(enabled=show_scroll_hud)
