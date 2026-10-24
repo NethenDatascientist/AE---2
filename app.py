@@ -1,3 +1,4 @@
+import calendar
 import html
 import io
 import os
@@ -174,7 +175,7 @@ st.markdown(
             font-size: 0.77rem;
         }
 
-        /* 5. CE-Friendly Combined Overdue Works Table (Wider + 3-Line Work Name Wrapping) */
+        /* 5. CE-Friendly Combined Overdue Works Table */
         .ce-table-wrapper {
             max-height: 580px;
             overflow-y: auto;
@@ -196,15 +197,15 @@ st.markdown(
             position: sticky;
             top: 0;
             z-index: 10;
-            background: #273346; /* Distinct, elevated slate-blue background to stand out */
-            color: #F1F5F9; /* Bright, crisp white text for high contrast */
+            background: #273346;
+            color: #F1F5F9;
             font-weight: 700;
             text-align: left;
             padding: 11px 10px;
-            border-bottom: 2px solid #3B82F6; /* Blue accent line separating headers from data */
+            border-bottom: 2px solid #3B82F6;
             white-space: nowrap;
             font-size: 0.82rem;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.4); /* Slight drop shadow for depth */
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.4);
         }
         table.ce-overdue-table tbody tr {
             border-bottom: 1px solid rgba(148, 163, 184, 0.12);
@@ -221,11 +222,12 @@ st.markdown(
             vertical-align: middle;
             line-height: 1.35;
         }
-        /* Wider ಕಾಮಗಾರಿ ಹೆಸರು column + up to 3 lines for long work names */
+        
+        /* 25% Decreased width for ಕಾಮಗಾರಿ ಹೆಸರು column to avoid horizontal scroll */
         .ce-work-name-cell {
-            width: 34%;
-            min-width: 380px;
-            max-width: 500px;
+            width: 25%;
+            min-width: 285px;
+            max-width: 375px;
             white-space: normal;
         }
         .ce-work-name-clamp {
@@ -270,11 +272,6 @@ st.markdown(
 # ULTRA-SLIM (14px), TEXT-FREE RIGHT-EDGE SCROLLER (WITH RELOAD FIX)
 # -----------------------------------------------------------------------------
 def inject_scroll_hud_graphics(enabled: bool = True):
-    """
-    Injects an ultra-slim (14px), 100% transparent, writing-free
-    right-edge scrolling ruler overlay. Includes context-cleanup 
-    to prevent freezing after re-syncs or page reloads.
-    """
     components.html(
         f"""
         <script>
@@ -283,7 +280,7 @@ def inject_scroll_hud_graphics(enabled: bool = True):
             const parentWin = window.parent;
             const isEnabled = {str(enabled).lower()};
 
-            // 1. CLEANUP PREVIOUS RUN (Fixes the stuck scroller issue after Sync/Reload)
+            // 1. CLEANUP PREVIOUS RUN
             if (parentWin.__miScrollHudRAF) {{
                 parentWin.cancelAnimationFrame(parentWin.__miScrollHudRAF);
             }}
@@ -301,9 +298,7 @@ def inject_scroll_hud_graphics(enabled: bool = True):
                 "#mi-scroll-hud-active-topic, .mi-hud-section-Node, #mi-scroll-hud-crosshair"
             ).forEach(el => el.remove());
 
-            if (!isEnabled) {{
-                return;
-            }}
+            if (!isEnabled) return;
 
             // 2. INJECT CSS
             const style = parentDoc.createElement("style");
@@ -549,9 +544,7 @@ def inject_scroll_hud_graphics(enabled: bool = True):
                 parentWin.__miScrollHudRAF = parentWin.requestAnimationFrame(loop);
             }}
             
-            // Kickstart the fresh animation loop
             parentWin.__miScrollHudRAF = parentWin.requestAnimationFrame(loop);
-            
         }})();
         </script>
         """,
@@ -589,7 +582,7 @@ TARGET_SHEETS = [
     "NABARD - Other Flood Control",
 ]
 
-COL_WORK_NAME_KN = "ಕಾಮಗಾರಿ ಹೆಸರು"
+COL_WORK_NAME_KN = "Work Name"
 COL_DIV_KN = "ವಿಭಾಗ"
 COL_SUBDIV_KN = "ಉಪವಿಭಾಗ"
 COL_SO_KN = "ಶಾಖಾಧಿಕಾರಿಯ ಹೆಸರು"
@@ -652,6 +645,41 @@ def get_shared_state_v10() -> dict:
 # -----------------------------------------------------------------------------
 # HELPER FUNCTIONS
 # -----------------------------------------------------------------------------
+def calc_overdue_duration(target_date_obj, current_date_obj) -> str:
+    """Calculates the exact elapsed time (Years, Months, Days) including today."""
+    if not isinstance(target_date_obj, date) or target_date_obj >= current_date_obj:
+        return "-"
+    
+    y = current_date_obj.year - target_date_obj.year
+    m = current_date_obj.month - target_date_obj.month
+    d = current_date_obj.day - target_date_obj.day + 1 # Include today
+    
+    if d <= 0:
+        m -= 1
+        prev_month = current_date_obj.month - 1 if current_date_obj.month > 1 else 12
+        prev_year = current_date.year if current_date.month > 1 else current_date.year - 1
+        d += calendar.monthrange(prev_year, prev_month)[1]
+        
+    if m < 0:
+        y -= 1
+        m += 12
+        
+    days_in_current_month = calendar.monthrange(current_date_obj.year, current_date_obj.month)[1]
+    if d > days_in_current_month:
+        d -= days_in_current_month
+        m += 1
+        if m >= 12:
+            m -= 12
+            y += 1
+            
+    parts = []
+    if y > 0: parts.append(f"{y} year{'s' if y > 1 else ''}")
+    if m > 0: parts.append(f"{m} month{'s' if m > 1 else ''}")
+    if d > 0: parts.append(f"{d} day{'s' if d > 1 else ''}")
+    
+    return "(" + ", ".join(parts) + ")" if parts else "(0 days)"
+
+
 def compress_bar_length(val: float, threshold: int = BAR_SHRINK_THRESHOLD) -> float:
     v = float(val)
     t = float(threshold)
@@ -798,7 +826,7 @@ def find_matching_column_indices(headers: list[str]) -> dict:
         ):
             col_idx_map["as_off"] = idx
         elif (
-            norm_col in {"ಕಾಮಗಾರಿ ಹೆಸರು", "ಕಾಮಗಾರಿಯ ಹೆಸರು", "ಕಾಮಗಾರಿಗಳ ಹೆಸರು"}
+            norm_col in {"ಕಾಮಗಾರಿ ಹೆಸರು", "ಕಾಮಗಾರಿಯ ಹೆಸರು", "ಕಾಮಗಾರಿಗಳ ಹೆಸರು", "WORK NAME", "NAME OF WORK"}
             and "work_name" not in col_idx_map
         ):
             col_idx_map["work_name"] = idx
@@ -1040,7 +1068,7 @@ def render_ce_overdue_html_table(df_display: pd.DataFrame) -> str:
                     f'<div class="ce-work-name-clamp">{escaped_text}</div>'
                     f"</td>"
                 )
-            elif col == "Target Date":
+            elif col in ["Target Date", "Overdue By"]:
                 cells_html.append(
                     f'<td class="ce-date-overdue">{escaped_text}</td>'
                 )
@@ -1254,6 +1282,10 @@ def parse_xlsx_workbook(workbook_bytes: bytes):
 
             target_date_list = parse_indian_date_list(s_target_raw)
             actual_empty = is_empty_date(s_actual_raw)
+            
+            # Calculate overdue duration strings
+            duration_list = [calc_overdue_duration(td, today_ist_date) for td in target_date_list]
+            s_overdue_duration = pd.Series(duration_list, index=df.index, dtype=str)
 
             is_status_p = s_status_upper == "P"
             is_status_ets = s_status_upper == "ETS"
@@ -1336,6 +1368,7 @@ def parse_xlsx_workbook(workbook_bytes: bytes):
                         ],
                         COL_START_DATE_KN: s_start_date.loc[overdue_mask].values,
                         COL_TARGET_DATE_KN: s_target_Formatted.loc[overdue_mask].values,
+                        "Overdue By": s_overdue_duration.loc[overdue_mask].values,
                         COL_HOA_KN: s_hoa.loc[overdue_mask].values,
                         "_division_name": s_div_raw.loc[overdue_mask].values,
                         "_subdivision_name": s_subdiv_mapped.loc[overdue_mask].values,
@@ -1354,8 +1387,8 @@ def parse_xlsx_workbook(workbook_bytes: bytes):
                     "Status": "Loaded",
                     "Sub-division Col": "Found" if "subdivision" in col_idx_map else "Missing",
                     "EE / TA / AS Cols": (
-                        f"EE:{'Y' if 'ee' in col_idx_map else 'N'} "
-                        f"TA:{'Y' if 'ta' in col_idx_map else 'N'} "
+                        f"EE:{'Y' if 'ee' in col_idx_map else 'N'} | "
+                        f"TA:{'Y' if 'ta' in col_idx_map else 'N'} | "
                         f"AS:{'Y' if 'as_off' in col_idx_map else 'N'}"
                     ),
                     "Rows Loaded": len(sub),
@@ -2133,12 +2166,12 @@ if selected_officer:
             LABEL_EE_EN,
             COL_START_DATE_KN,
             COL_TARGET_DATE_KN,
+            "Overdue By",
             COL_HOA_KN,
         ]
 
         officer_overdue_df = officer_overdue_df[curated_cols].reset_index(drop=True)
         
-        # Translate to exact requested English Headers
         rename_map = {
             COL_WORK_NAME_KN: "Work Name",
             COL_DIV_KN: LABEL_DIV_EN,
