@@ -1034,7 +1034,7 @@ def render_ce_overdue_html_table(df_display: pd.DataFrame) -> str:
             raw_text = str(row[col]) if pd.notna(row[col]) else "-"
             escaped_text = html.escape(raw_text if raw_text else "-")
 
-            if col == COL_WORK_NAME_KN:
+            if col == "Work Name":
                 cells_html.append(
                     f'<td class="ce-work-name-cell" title="{escaped_text}">'
                     f'<div class="ce-work-name-clamp">{escaped_text}</div>'
@@ -2140,6 +2140,7 @@ if selected_officer:
         
         # Translate to exact requested English Headers
         rename_map = {
+            COL_WORK_NAME_KN: "Work Name",
             COL_DIV_KN: LABEL_DIV_EN,
             COL_SUBDIV_KN: LABEL_SUBDIV_EN,
             opposite_officer_col: opposite_officer_en,
