@@ -122,6 +122,19 @@ st.markdown(
             padding: 0.6rem 0.85rem !important;
             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2) !important;
         }
+
+        /* 🔴 RED Tint for Overdue Works (4th column) */
+        div[data-testid="column"]:nth-child(4) div[data-testid="stMetric"] {
+            border-top: 3px solid #EF4444 !important;
+            background: linear-gradient(145deg, rgba(127, 29, 29, 0.35), rgba(15, 23, 42, 0.85)) !important;
+        }
+
+        /* 🟢 GREEN Tint for ETS Works (5th column) */
+        div[data-testid="column"]:nth-child(5) div[data-testid="stMetric"] {
+            border-top: 3px solid #4ADE80 !important;
+            background: linear-gradient(145deg, rgba(6, 78, 59, 0.35), rgba(15, 23, 42, 0.85)) !important;
+        }
+
         div[data-testid="stMetricValue"] {
             font-size: 1.6rem !important;
             font-weight: 700 !important;
