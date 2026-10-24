@@ -223,7 +223,7 @@ st.markdown(
             line-height: 1.35;
         }
         
-        /* 25% Decreased width for ಕಾಮಗಾರಿ ಹೆಸರು column to avoid horizontal scroll */
+        /* 25% Decreased width for Work Name column */
         .ce-work-name-cell {
             width: 25%;
             min-width: 285px;
@@ -613,15 +613,16 @@ DEFAULT_SHEET_URL = st.secrets.get(
     "https://docs.google.com/spreadsheets/d/13W04z-fdU3RhuVJ5vQFRpK4BBSQRJWfscPqpr7Oj2Y8/edit?gid=1055199869#gid=1055199869",
 )
 
-SCHEMA_VERSION = "v10_ce_exec_dashboard"
-DISK_BACKUP_FILE = "/tmp/mi_overdue_shared_snapshot_v10.pkl"
+# Bumped schema version to bypass cache and load new 'Overdue By' column properly
+SCHEMA_VERSION = "v11_ce_overdue_dashboard"
+DISK_BACKUP_FILE = "/tmp/mi_overdue_shared_snapshot_v11.pkl"
 
 
 # -----------------------------------------------------------------------------
 # SHARED SERVER MEMORY & LOCK
 # -----------------------------------------------------------------------------
 @st.cache_resource
-def get_shared_state_v10() -> dict:
+def get_shared_state_v11() -> dict:
     state = {
         "version": SCHEMA_VERSION,
         "lock": threading.Lock(),
@@ -657,7 +658,7 @@ def calc_overdue_duration(target_date_obj, current_date_obj) -> str:
     if d <= 0:
         m -= 1
         prev_month = current_date_obj.month - 1 if current_date_obj.month > 1 else 12
-        prev_year = current_date.year if current_date.month > 1 else current_date.year - 1
+        prev_year = current_date_obj.year if current_date_obj.month > 1 else current_date_obj.year - 1
         d += calendar.monthrange(prev_year, prev_month)[1]
         
     if m < 0:
@@ -1283,7 +1284,7 @@ def parse_xlsx_workbook(workbook_bytes: bytes):
             target_date_list = parse_indian_date_list(s_target_raw)
             actual_empty = is_empty_date(s_actual_raw)
             
-            # Calculate overdue duration strings
+            # Calculate the Overdue By exact duration for each row
             duration_list = [calc_overdue_duration(td, today_ist_date) for td in target_date_list]
             s_overdue_duration = pd.Series(duration_list, index=df.index, dtype=str)
 
@@ -1387,8 +1388,8 @@ def parse_xlsx_workbook(workbook_bytes: bytes):
                     "Status": "Loaded",
                     "Sub-division Col": "Found" if "subdivision" in col_idx_map else "Missing",
                     "EE / TA / AS Cols": (
-                        f"EE:{'Y' if 'ee' in col_idx_map else 'N'} | "
-                        f"TA:{'Y' if 'ta' in col_idx_map else 'N'} | "
+                        f"EE:{'Y' if 'ee' in col_idx_map else 'N'} "
+                        f"TA:{'Y' if 'ta' in col_idx_map else 'N'} "
                         f"AS:{'Y' if 'as_off' in col_idx_map else 'N'}"
                     ),
                     "Rows Loaded": len(sub),
@@ -1530,7 +1531,7 @@ show_scroll_hud = st.sidebar.checkbox(
 # -----------------------------------------------------------------------------
 st.title("📊 Minor Irrigation — Overdue Works Dashboard")
 
-shared_state = get_shared_state_v10()
+shared_state = get_shared_state_v11()
 
 if uploaded_xlsx is not None:
     file_id = f"{uploaded_xlsx.name}_{uploaded_xlsx.size}_{SCHEMA_VERSION}"
