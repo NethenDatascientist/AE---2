@@ -1714,7 +1714,13 @@ else:
 total_assigned_all = int(summary_df["total_works"].sum())
 total_overdue_all = int(summary_df["overdue_works"].sum())
 total_ets_all = int(summary_df["ets_works"].sum())
-named_officers_count = int((~summary_df["_is_unassigned"]).sum())
+
+# NEW LOGIC: Filter officer count based on the 'hide_zero_overdue' checkbox
+if hide_zero_overdue:
+    named_officers_count = int(((~summary_df["_is_unassigned"]) & (summary_df["overdue_works"] > 0)).sum())
+else:
+    named_officers_count = int((~summary_df["_is_unassigned"]).sum())
+
 unassigned_works_count = int(
     summary_df.loc[summary_df["_is_unassigned"], "total_works"].sum()
 )
@@ -1738,10 +1744,18 @@ filter_scope_label = " | ".join(active_scope_parts)
 
 k1, k2, k3, k4, k5 = st.columns([1.1, 1.0, 1.05, 1.35, 1.0], gap="medium")
 k1.metric("📅 Date (Today)", today_str)
+
+# Dynamic help text based on checkbox state
+officer_help_text = (
+    f"Officers with >0 Overdue works (plus {unassigned_works_count:,} unassigned works)."
+    if hide_zero_overdue else
+    f"All named {view_choice}s (plus {unassigned_works_count:,} unassigned works)."
+)
+
 k2.metric(
     f"👥 {view_choice}s",
     f"{named_officers_count:,}",
-    help=f"Named {view_choice}s (plus {unassigned_works_count:,} unassigned works).",
+    help=officer_help_text,
 )
 k3.metric("📋 Total Works", f"{total_assigned_all:,}")
 k4.metric(
