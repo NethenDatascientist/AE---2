@@ -1759,7 +1759,7 @@ k2.metric(
 )
 k3.metric("📋 Total Works", f"{total_assigned_all:,}")
 k4.metric(
-    "🔴 Overdue Works ('P')",
+    "🔴 Overdue Works ('Progress')",
     f"{total_overdue_all:,} ({overall_overdue_pct}%)",
 )
 k5.metric("🟢 'ETS' Works", f"{total_ets_all:,}")
