@@ -1739,7 +1739,7 @@ filter_scope_label = " | ".join(active_scope_parts)
 k1, k2, k3, k4, k5 = st.columns([1.1, 1.0, 1.05, 1.35, 1.0], gap="medium")
 k1.metric("📅 Date (Today)", today_str)
 k2.metric(
-    f"👥 {view_choice}s(including Er's with no overdure works",
+    f"👥 {view_choice}s (including Er's with no overdure works)",
     f"{named_officers_count:,}",
     help=f"Named {view_choice}s (plus {unassigned_works_count:,} unassigned works).",
 )
