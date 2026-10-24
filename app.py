@@ -232,12 +232,12 @@ st.markdown(
         }
         .ce-work-name-clamp {
             display: -webkit-box;
-            -webkit-line-clamp: 3;
+            -webkit-line-clamp: 4;
             -webkit-box-orient: vertical;
             overflow: hidden;
             text-overflow: ellipsis;
             line-height: 1.35;
-            max-height: 4.05em;
+            max-height: 5.4em;
             font-weight: 600;
             color: #F8FAFC;
         }
