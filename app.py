@@ -267,7 +267,7 @@ st.markdown(
 
 
 # -----------------------------------------------------------------------------
-# ULTRA-SLIM (14px), TEXT-FREE RIGHT-EDGE SCROLLER
+# ULTRA-SLIM (14px), TEXT-FREE RIGHT-EDGE SCROLLER (WITH RELOAD FIX)
 # -----------------------------------------------------------------------------
 def inject_scroll_hud_graphics(enabled: bool = True):
     """
@@ -1040,7 +1040,7 @@ def render_ce_overdue_html_table(df_display: pd.DataFrame) -> str:
                     f'<div class="ce-work-name-clamp">{escaped_text}</div>'
                     f"</td>"
                 )
-            elif col == COL_TARGET_DATE_KN:
+            elif col == "Target Date":
                 cells_html.append(
                     f'<td class="ce-date-overdue">{escaped_text}</td>'
                 )
@@ -1354,8 +1354,8 @@ def parse_xlsx_workbook(workbook_bytes: bytes):
                     "Status": "Loaded",
                     "Sub-division Col": "Found" if "subdivision" in col_idx_map else "Missing",
                     "EE / TA / AS Cols": (
-                        f"EE:{'Y' if 'ee' in col_idx_map else 'N'} | "
-                        f"TA:{'Y' if 'ta' in col_idx_map else 'N'} | "
+                        f"EE:{'Y' if 'ee' in col_idx_map else 'N'} "
+                        f"TA:{'Y' if 'ta' in col_idx_map else 'N'} "
                         f"AS:{'Y' if 'as_off' in col_idx_map else 'N'}"
                     ),
                     "Rows Loaded": len(sub),
@@ -1727,7 +1727,6 @@ total_assigned_all = int(summary_df["total_works"].sum())
 total_overdue_all = int(summary_df["overdue_works"].sum())
 total_ets_all = int(summary_df["ets_works"].sum())
 
-# Dynamic Officer Count Logic Based on Checkbox
 if hide_zero_overdue:
     named_officers_count = int(((~summary_df["_is_unassigned"]) & (summary_df["overdue_works"] > 0)).sum())
 else:
@@ -2051,7 +2050,7 @@ else:
 st.divider()
 
 # =============================================================================
-# SECTION 2: COMBINED OVERDUE WORKS TABLE
+# SECTION 2: COMBINED OVERDUE WORKS TABLE (ENGLISH HEADERS)
 # =============================================================================
 st.subheader(
     f"📂 Combined Overdue Works by {view_choice} — [{filter_scope_label}]"
@@ -2120,6 +2119,9 @@ if selected_officer:
         opposite_officer_col = (
             COL_AEE_KN if view_choice == LABEL_AE_EN else COL_SO_KN
         )
+        opposite_officer_en = (
+            LABEL_AEE_EN if view_choice == LABEL_AE_EN else LABEL_AE_EN
+        )
 
         curated_cols = [
             COL_WORK_NAME_KN,
@@ -2135,6 +2137,18 @@ if selected_officer:
         ]
 
         officer_overdue_df = officer_overdue_df[curated_cols].reset_index(drop=True)
+        
+        # Translate to exact requested English Headers
+        rename_map = {
+            COL_DIV_KN: LABEL_DIV_EN,
+            COL_SUBDIV_KN: LABEL_SUBDIV_EN,
+            opposite_officer_col: opposite_officer_en,
+            COL_START_DATE_KN: "Start Date",
+            COL_TARGET_DATE_KN: "Target Date",
+            COL_HOA_KN: "H.O.A."
+        }
+        officer_overdue_df.rename(columns=rename_map, inplace=True)
+        
         officer_overdue_df.insert(0, "Sl. No.", range(1, len(officer_overdue_df) + 1))
 
         if officer_overdue_df.empty:
@@ -2142,11 +2156,11 @@ if selected_officer:
                 f"🎉 **{selected_officer}** has **0** overdue works in **{filter_scope_label}**!"
             )
         else:
-            hoa_involved = officer_overdue_df[COL_HOA_KN].unique().tolist()
+            hoa_involved = officer_overdue_df["H.O.A."].unique().tolist()
             st.markdown(
                 f"**Selected {view_choice}:** `{selected_officer}` &nbsp;|&nbsp; "
                 f"**Total Overdue Works:** `{len(officer_overdue_df)}` &nbsp;|&nbsp; "
-                f"**Account Heads (`{COL_HOA_KN}`):** `{', '.join(hoa_involved)}`"
+                f"**Account Heads (H.O.A.):** `{', '.join(hoa_involved)}`"
             )
 
             safe_name = (
