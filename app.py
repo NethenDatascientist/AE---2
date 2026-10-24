@@ -40,7 +40,7 @@ st.markdown(
             width: 100% !important;
         }
 
-        /* 1. 15% Narrower Left Sidebar (200px instead of 235px) */
+        /* 1. Narrower, Sleek Left Sidebar (200px) */
         section[data-testid="stSidebar"][aria-expanded="true"] {
             width: 200px !important;
             min-width: 200px !important;
@@ -113,7 +113,7 @@ st.markdown(
             padding-top: 0.15rem !important;
         }
 
-        /* 4. KPI Metric Cards */
+        /* 4. KPI Metric Cards (Blue by default) */
         div[data-testid="stMetric"] {
             background: linear-gradient(145deg, rgba(30, 41, 59, 0.55), rgba(15, 23, 42, 0.78)) !important;
             border: 1px solid rgba(148, 163, 184, 0.16) !important;
@@ -122,14 +122,16 @@ st.markdown(
             padding: 0.6rem 0.85rem !important;
             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2) !important;
         }
-
-        /* 🔴 RED Tint for Overdue Works (4th column) */
+        
+        /* 🔴 RED Tint for Overdue Works (Aggressive target for 4th column) */
+        div[data-testid="stHorizontalBlock"] > div:nth-child(4) div[data-testid="stMetric"],
         div[data-testid="column"]:nth-child(4) div[data-testid="stMetric"] {
             border-top: 3px solid #EF4444 !important;
             background: linear-gradient(145deg, rgba(127, 29, 29, 0.35), rgba(15, 23, 42, 0.85)) !important;
         }
 
-        /* 🟢 GREEN Tint for ETS Works (5th column) */
+        /* 🟢 GREEN Tint for ETS Works (Aggressive target for 5th column) */
+        div[data-testid="stHorizontalBlock"] > div:nth-child(5) div[data-testid="stMetric"],
         div[data-testid="column"]:nth-child(5) div[data-testid="stMetric"] {
             border-top: 3px solid #4ADE80 !important;
             background: linear-gradient(145deg, rgba(6, 78, 59, 0.35), rgba(15, 23, 42, 0.85)) !important;
@@ -513,9 +515,6 @@ def inject_scroll_hud_graphics(enabled: bool = True):
             parentWin.__miCurrentPct = parentWin.__miCurrentPct || 0;
 
             parentWin.__miHudStepFn = function() {{
-                const strayTopic = parentDoc.getElementById("mi-scroll-hud-active-topic");
-                if (strayTopic) strayTopic.remove();
-
                 const root = parentDoc.getElementById("mi-scroll-hud-root");
                 const inner = parentDoc.getElementById("mi-scroll-hud-ticks-inner");
                 const indicator = parentDoc.getElementById("mi-scroll-hud-indicator");
@@ -584,7 +583,6 @@ TARGET_SHEETS = [
     "NABARD - Other Flood Control",
 ]
 
-# Raw Kannada / Sheet Column Identifiers (Used inside Combined Overdue Works Table)
 COL_WORK_NAME_KN = "ಕಾಮಗಾರಿ ಹೆಸರು"
 COL_DIV_KN = "ವಿಭಾಗ"
 COL_SUBDIV_KN = "ಉಪವಿಭಾಗ"
@@ -596,7 +594,6 @@ COL_ACTUAL_DATE_KN = "ಮುಕ್ತಾಯವಾದ ದಿನಾಂಕ"
 COL_HOA_KN = "ಲೆಕ್ಕಶೀರ್ಷಿಕೆ"
 COL_STATUS_STD = "CP/CF/P/TBS/TP/ETS/OTH"
 
-# English Labels Used Across the Dashboard UI
 LABEL_DIV_EN = "Division"
 LABEL_SUBDIV_EN = "Sub-division"
 LABEL_AE_EN = "Assistant Engineer"
@@ -735,7 +732,7 @@ def format_cell_for_display(val) -> str:
 def extract_spreadsheet_key(sheet_url: str) -> str:
     match = re.search(r"/spreadsheets/d/([a-zA-Z0-9-_]+)", sheet_url)
     if not match:
-        raise ValueError("Invalid Google Sheet URL. Could not extract spreadsheet key.")
+        raise ValueError("Invalid Google Sheet URL.")
     return match.group(1)
 
 
@@ -1020,10 +1017,6 @@ def display_clean_cell(val: str) -> str:
 
 
 def render_ce_overdue_html_table(df_display: pd.DataFrame) -> str:
-    """
-    Render a clean, executive-friendly HTML table where 'ಕಾಮಗಾರಿ ಹೆಸರು' has
-    extra width and wraps up to 3 lines for long work names.
-    """
     headers_html = "".join(
         f"<th>{html.escape(str(col))}</th>" for col in df_display.columns
     )
@@ -1049,7 +1042,7 @@ def render_ce_overdue_html_table(df_display: pd.DataFrame) -> str:
                 cells_html.append(
                     f'<td class="ce-compact-cell">{escaped_text}</td>'
                 )
-        rows_html.append(f"<tr>{''.join(rows_html_inner := cells_html)}</tr>")
+        rows_html.append(f"<tr>{''.join(cells_html)}</tr>")
 
     return (
         f'<div class="ce-table-wrapper">'
@@ -1353,7 +1346,7 @@ def parse_xlsx_workbook(workbook_bytes: bytes):
                 {
                     "Sheet": target,
                     "Status": "Loaded",
-                    "Sub-division Col": "Found" if "subdivision" in col_idx_map else "Not in Sheet (Included)",
+                    "Sub-division Col": "Found" if "subdivision" in col_idx_map else "Missing",
                     "EE / TA / AS Cols": (
                         f"EE:{'Y' if 'ee' in col_idx_map else 'N'} | "
                         f"TA:{'Y' if 'ta' in col_idx_map else 'N'} | "
@@ -1646,7 +1639,7 @@ filtered_master_df = (
 )
 
 # -----------------------------------------------------------------------------
-# TOP CONTROLS ROW 2: OFFICER VIEW & SORT ORDER (ENGLISH)
+# TOP CONTROLS ROW 2: OFFICER VIEW & SORT ORDER
 # -----------------------------------------------------------------------------
 r_col1, r_col2 = st.columns(2, gap="medium")
 
@@ -1722,13 +1715,13 @@ else:
     ).reset_index(drop=True)
 
 # -----------------------------------------------------------------------------
-# KPI SUMMARY METRIC CARDS (5 COLUMNS)
+# KPI SUMMARY METRIC CARDS (5 COLUMNS WITH RED/GREEN TINTS)
 # -----------------------------------------------------------------------------
 total_assigned_all = int(summary_df["total_works"].sum())
 total_overdue_all = int(summary_df["overdue_works"].sum())
 total_ets_all = int(summary_df["ets_works"].sum())
 
-# NEW LOGIC: Filter officer count based on the 'hide_zero_overdue' checkbox
+# Dynamic Officer Count Logic Based on Checkbox
 if hide_zero_overdue:
     named_officers_count = int(((~summary_df["_is_unassigned"]) & (summary_df["overdue_works"] > 0)).sum())
 else:
@@ -1758,7 +1751,6 @@ filter_scope_label = " | ".join(active_scope_parts)
 k1, k2, k3, k4, k5 = st.columns([1.1, 1.0, 1.05, 1.35, 1.0], gap="medium")
 k1.metric("📅 Date (Today)", today_str)
 
-# Dynamic help text based on checkbox state
 officer_help_text = (
     f"Officers with >0 Overdue works (plus {unassigned_works_count:,} unassigned works)."
     if hide_zero_overdue else
@@ -1772,7 +1764,7 @@ k2.metric(
 )
 k3.metric("📋 Total Works", f"{total_assigned_all:,}")
 k4.metric(
-    "🔴 Overdue Works ('Progress')",
+    "🔴 Overdue Works ('P')",
     f"{total_overdue_all:,} ({overall_overdue_pct}%)",
 )
 k5.metric("🟢 'ETS' Works", f"{total_ets_all:,}")
@@ -1780,7 +1772,7 @@ k5.metric("🟢 'ETS' Works", f"{total_ets_all:,}")
 st.divider()
 
 # =============================================================================
-# SECTION 1 (FIRST): HORIZONTAL BAR CHART
+# SECTION 1: HORIZONTAL BAR CHART
 # =============================================================================
 st.subheader(
     f"📈 Overdue & ETS Works by {view_choice} — [{filter_scope_label}] ({sort_choice})"
@@ -2053,7 +2045,7 @@ else:
 st.divider()
 
 # =============================================================================
-# SECTION 2 (SECOND): COMBINED OVERDUE WORKS TABLE (CE CURATED VIEW + DOWNLOAD)
+# SECTION 2: COMBINED OVERDUE WORKS TABLE
 # =============================================================================
 st.subheader(
     f"📂 Combined Overdue Works by {view_choice} — [{filter_scope_label}]"
@@ -2178,7 +2170,7 @@ if selected_officer:
                     use_container_width=True,
                 )
 
-            # Render the CE-friendly 3-line wrapped HTML table
+            # Render the CE-friendly HTML table
             st.markdown(
                 render_ce_overdue_html_table(officer_overdue_df),
                 unsafe_allow_html=True,
@@ -2187,7 +2179,7 @@ if selected_officer:
 st.divider()
 
 # =============================================================================
-# SECTION 3 (THIRD): OFFICER-WISE SUMMARY TABLE (ENGLISH)
+# SECTION 3: OFFICER-WISE SUMMARY TABLE (ENGLISH)
 # =============================================================================
 st.subheader(f"📋 Officer-Wise Summary Table — [{filter_scope_label}]")
 
