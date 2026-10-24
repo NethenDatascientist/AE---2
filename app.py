@@ -196,12 +196,12 @@ st.markdown(
             position: sticky;
             top: 0;
             z-index: 10;
-            background: #1E293B;
-            color: #93C5FD;
+            background: #0F172A; /* Darker, sleek background */
+            color: #E2E8F0; /* Soft, easy-to-read silver/white instead of bright blue */
             font-weight: 700;
             text-align: left;
             padding: 10px 10px;
-            border-bottom: 2px solid rgba(59, 130, 246, 0.45);
+            border-bottom: 2px solid rgba(148, 163, 184, 0.35); /* Neutral border */
             white-space: nowrap;
             font-size: 0.81rem;
         }
