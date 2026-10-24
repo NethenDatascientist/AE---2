@@ -196,14 +196,15 @@ st.markdown(
             position: sticky;
             top: 0;
             z-index: 10;
-            background: #0F172A; /* Darker, sleek background */
-            color: #E2E8F0; /* Soft, easy-to-read silver/white instead of bright blue */
+            background: #273346; /* Distinct, elevated slate-blue background to stand out */
+            color: #F1F5F9; /* Bright, crisp white text for high contrast */
             font-weight: 700;
             text-align: left;
-            padding: 10px 10px;
-            border-bottom: 2px solid rgba(148, 163, 184, 0.35); /* Neutral border */
+            padding: 11px 10px;
+            border-bottom: 2px solid #3B82F6; /* Blue accent line separating headers from data */
             white-space: nowrap;
-            font-size: 0.81rem;
+            font-size: 0.82rem;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.4); /* Slight drop shadow for depth */
         }
         table.ce-overdue-table tbody tr {
             border-bottom: 1px solid rgba(148, 163, 184, 0.12);
