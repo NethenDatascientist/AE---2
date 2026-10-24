@@ -271,7 +271,8 @@ st.markdown(
 def inject_scroll_hud_graphics(enabled: bool = True):
     """
     Injects an ultra-slim (14px), 100% transparent, writing-free
-    right-edge scrolling ruler overlay.
+    right-edge scrolling ruler overlay. Includes context-cleanup 
+    to prevent freezing after re-syncs or page reloads.
     """
     components.html(
         f"""
@@ -280,6 +281,14 @@ def inject_scroll_hud_graphics(enabled: bool = True):
             const parentDoc = window.parent.document;
             const parentWin = window.parent;
             const isEnabled = {str(enabled).lower()};
+
+            // 1. CLEANUP PREVIOUS RUN (Fixes the stuck scroller issue after Sync/Reload)
+            if (parentWin.__miScrollHudRAF) {{
+                parentWin.cancelAnimationFrame(parentWin.__miScrollHudRAF);
+            }}
+            if (parentWin.__miScrollHandler) {{
+                parentDoc.removeEventListener("scroll", parentWin.__miScrollHandler, {{ capture: true }});
+            }}
 
             const oldHud = parentDoc.getElementById("mi-scroll-hud-root");
             if (oldHud) oldHud.remove();
@@ -295,6 +304,7 @@ def inject_scroll_hud_graphics(enabled: bool = True):
                 return;
             }}
 
+            // 2. INJECT CSS
             const style = parentDoc.createElement("style");
             style.id = "mi-scroll-hud-style";
             style.innerHTML = `
@@ -432,26 +442,20 @@ def inject_scroll_hud_graphics(enabled: bool = True):
             `;
             parentDoc.body.appendChild(hudRoot);
 
-            if (!parentWin.__miScrollHudListenerAttached) {{
-                parentWin.__miScrollHudListenerAttached = true;
-                parentWin.__miActiveScroller = null;
-
-                parentDoc.addEventListener(
-                    "scroll",
-                    function(e) {{
-                        const t = e.target;
-                        if (
-                            t &&
-                            t !== parentDoc &&
-                            t.scrollHeight > t.clientHeight + 20 &&
-                            t.clientHeight > parentWin.innerHeight * 0.45
-                        ) {{
-                            parentWin.__miActiveScroller = t;
-                        }}
-                    }},
-                    {{ passive: true, capture: true }}
-                );
-            }}
+            // 3. RE-BIND SCROLL EVENT LISTENER
+            parentWin.__miActiveScroller = null;
+            parentWin.__miScrollHandler = function(e) {{
+                const t = e.target;
+                if (
+                    t &&
+                    t !== parentDoc &&
+                    t.scrollHeight > t.clientHeight + 20 &&
+                    t.clientHeight > parentWin.innerHeight * 0.45
+                ) {{
+                    parentWin.__miActiveScroller = t;
+                }}
+            }};
+            parentDoc.addEventListener("scroll", parentWin.__miScrollHandler, {{ passive: true, capture: true }});
 
             function findScrollElement() {{
                 const activeScroller = parentWin.__miActiveScroller;
@@ -512,6 +516,7 @@ def inject_scroll_hud_graphics(enabled: bool = True):
                 return Math.max(0, Math.min(100, pct));
             }}
 
+            // 4. RE-BIND ANIMATION LOOP
             parentWin.__miCurrentPct = parentWin.__miCurrentPct || 0;
 
             parentWin.__miHudStepFn = function() {{
@@ -536,16 +541,16 @@ def inject_scroll_hud_graphics(enabled: bool = True):
                 }}
             }};
 
-            if (!parentWin.__miScrollHudLoopRunning) {{
-                parentWin.__miScrollHudLoopRunning = true;
-                function loop() {{
-                    if (parentWin.__miHudStepFn) {{
-                        parentWin.__miHudStepFn();
-                    }}
-                    parentWin.requestAnimationFrame(loop);
+            function loop() {{
+                if (parentWin.__miHudStepFn) {{
+                    parentWin.__miHudStepFn();
                 }}
-                parentWin.requestAnimationFrame(loop);
+                parentWin.__miScrollHudRAF = parentWin.requestAnimationFrame(loop);
             }}
+            
+            // Kickstart the fresh animation loop
+            parentWin.__miScrollHudRAF = parentWin.requestAnimationFrame(loop);
+            
         }})();
         </script>
         """,
