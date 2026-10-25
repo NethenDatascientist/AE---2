@@ -229,6 +229,41 @@ st.markdown(
             border: 1px solid rgba(96, 165, 250, 0.3);
             color: #93C5FD;
         }
+
+        /* Ultra-Compact Premium Main Header */
+        .premium-compact-header {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.4rem 0.85rem;
+            margin-top: -0.5rem;  /* Pulls it up tight to save space */
+            margin-bottom: 0.5rem; /* Tight spacing below */
+            background: linear-gradient(90deg, rgba(30, 41, 59, 0.75) 0%, rgba(15, 23, 42, 0.3) 100%);
+            border: 1px solid rgba(148, 163, 184, 0.18);
+            border-left: 4px solid #3B82F6;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        }
+        .premium-icon-wrapper {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(59, 130, 246, 0.15);
+            border: 1px solid rgba(59, 130, 246, 0.35);
+            border-radius: 6px;
+            width: 32px;
+            height: 32px;
+            font-size: 1.15rem;
+            box-shadow: 0 0 10px rgba(59, 130, 246, 0.25);
+        }
+        .premium-compact-title {
+            font-size: 1.4rem;
+            font-weight: 800;
+            color: #F8FAFC;
+            margin: 0;
+            letter-spacing: -0.2px;
+            line-height: 1;
+        }
         /* Status Bar Banner */
         .mi-status-bar {
             display: flex;
@@ -1611,7 +1646,15 @@ show_scroll_hud = st.sidebar.checkbox(
 # -----------------------------------------------------------------------------
 # MAIN UI & THREAD-SAFE DATA LOADING
 # -----------------------------------------------------------------------------
-st.title("📊 Minor Irrigation — Overdue Works Dashboard")
+st.markdown(
+    """
+    <div class="premium-compact-header">
+        <div class="premium-icon-wrapper">📊</div>
+        <h1 class="premium-compact-title">Minor Irrigation — Overdue Works Dashboard</h1>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
 
 shared_state = get_shared_state_v11()
 
