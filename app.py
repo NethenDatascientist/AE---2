@@ -216,7 +216,7 @@ st.markdown(
             border-left: 4px solid #3B82F6;
         }
         .exec-section-title {
-            font-size: 1.1rem;
+            font-size: 1.35rem;
             font-weight: 700;
             color: #F8FAFC;
         }
