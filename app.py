@@ -235,14 +235,12 @@ st.markdown(
             display: flex;
             align-items: center;
             gap: 0.75rem;
-            padding: 0.4rem 0.85rem;
+            padding: 0.4rem 0; /* Removed side padding so it aligns flush left */
             margin-top: 0.3rem;  
             margin-bottom: 0.5rem; 
-            background: linear-gradient(90deg, rgba(30, 41, 59, 0.75) 0%, rgba(15, 23, 42, 0.3) 100%);
-            border: none; /* Removed the outer box border */
-            border-left: 4px solid #3B82F6; /* Kept the blue accent line */
-            border-radius: 8px;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            background: transparent; /* Removed the gradient */
+            border: none; /* Removed all borders */
+            box-shadow: none; /* Removed the box shadow */
         }
         .premium-icon-wrapper {
             display: flex;
