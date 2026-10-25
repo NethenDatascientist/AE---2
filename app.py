@@ -200,7 +200,35 @@ st.markdown(
             font-size: 0.82rem !important;
             color: #CBD5E1 !important;
         }
-
+/* Section Header Banners */
+        .exec-section-banner {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: space-between;
+            gap: 0.5rem 1rem;
+            padding: 0.6rem 1rem;
+            margin-top: 0.25rem;
+            margin-bottom: 0.65rem;
+            border-radius: 10px;
+            background: rgba(15, 23, 42, 0.6);
+            border: 1px solid rgba(148, 163, 184, 0.16);
+            border-left: 4px solid #3B82F6;
+        }
+        .exec-section-title {
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: #F8FAFC;
+        }
+        .exec-scope-badge {
+            font-size: 0.78rem;
+            font-weight: 600;
+            padding: 0.25rem 0.75rem;
+            border-radius: 999px;
+            background: rgba(59, 130, 246, 0.12);
+            border: 1px solid rgba(96, 165, 250, 0.3);
+            color: #93C5FD;
+        }
         /* Status Bar Banner */
         .mi-status-bar {
             display: flex;
@@ -1867,8 +1895,14 @@ st.divider()
 # =============================================================================
 # SECTION 1: HORIZONTAL BAR CHART
 # =============================================================================
-st.subheader(
-    f"📈 Overdue & ETS Works by {view_choice} — [{filter_scope_label}] ({sort_choice})"
+st.markdown(
+    f"""
+    <div class="exec-section-banner">
+        <div class="exec-section-title">📈 Overdue & ETS Works by {view_choice} ({sort_choice})</div>
+        <div class="exec-scope-badge">{html.escape(filter_scope_label)}</div>
+    </div>
+    """,
+    unsafe_allow_html=True,
 )
 
 if hide_zero_overdue:
@@ -2140,8 +2174,14 @@ st.divider()
 # =============================================================================
 # SECTION 2: COMBINED OVERDUE WORKS TABLE (ENGLISH HEADERS)
 # =============================================================================
-st.subheader(
-    f"📂 Combined Overdue Works by {view_choice} — [{filter_scope_label}]"
+st.markdown(
+    f"""
+    <div class="exec-section-banner">
+        <div class="exec-section-title">📂 Combined Overdue Works by {view_choice}</div>
+        <div class="exec-scope-badge">{html.escape(filter_scope_label)}</div>
+    </div>
+    """,
+    unsafe_allow_html=True,
 )
 
 officer_options = (
@@ -2290,8 +2330,15 @@ st.divider()
 # =============================================================================
 # SECTION 3: OFFICER-WISE SUMMARY TABLE (ENGLISH)
 # =============================================================================
-st.subheader(f"📋 Officer-Wise Summary Table — [{filter_scope_label}]")
-
+st.markdown(
+    f"""
+    <div class="exec-section-banner">
+        <div class="exec-section-title">📋 Officer-Wise Summary Table</div>
+        <div class="exec-scope-badge">{html.escape(filter_scope_label)}</div>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
 display_table = summary_df[
     [
         view_choice,
