@@ -236,8 +236,8 @@ st.markdown(
             align-items: center;
             gap: 0.75rem;
             padding: 0.4rem 0.85rem;
-            margin-top: -0.5rem;  /* Pulls it up tight to save space */
-            margin-bottom: 0.5rem; /* Tight spacing below */
+            margin-top: 0.3rem;  /* Changed from -0.5rem to 0.3rem to fix the top cut-off */
+            margin-bottom: 0.5rem; 
             background: linear-gradient(90deg, rgba(30, 41, 59, 0.75) 0%, rgba(15, 23, 42, 0.3) 100%);
             border: 1px solid rgba(148, 163, 184, 0.18);
             border-left: 4px solid #3B82F6;
