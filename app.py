@@ -1858,15 +1858,13 @@ overall_overdue_pct = (
     else 0.0
 )
 
-active_scope_parts = [f"{LABEL_DIV_EN}: {selected_division}"]
-if selected_subdivision != ALL_OPTION:
-    active_scope_parts.append(f"{LABEL_SUBDIV_EN}: {selected_subdivision}")
-if selected_ee != ALL_OPTION:
-    active_scope_parts.append(f"EE: {selected_ee}")
-if selected_ta != ALL_OPTION:
-    active_scope_parts.append(f"TA: {selected_ta}")
-if selected_as != ALL_OPTION:
-    active_scope_parts.append(f"AS: {selected_as}")
+active_scope_parts = [
+    f"{LABEL_DIV_EN}: {selected_division}",
+    f"{LABEL_SUBDIV_EN}: {selected_subdivision}",
+    f"EE: {selected_ee}",
+    f"TA: {selected_ta}",
+    f"AS: {selected_as}"
+]
 filter_scope_label = " | ".join(active_scope_parts)
 
 k1, k2, k3, k4, k5 = st.columns(5, gap="medium")
