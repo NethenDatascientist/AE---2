@@ -1841,7 +1841,7 @@ if selected_as != ALL_OPTION:
     active_scope_parts.append(f"AS: {selected_as}")
 filter_scope_label = " | ".join(active_scope_parts)
 
-k1, k2, k3, k4, k5 = st.columns([1.1, 1.0, 1.05, 1.35, 1.0], gap="medium")
+k1, k2, k3, k4, k5 = st.columns(5, gap="medium")
 k1.metric("📅 Date (Today)", today_str)
 
 officer_help_text = (
