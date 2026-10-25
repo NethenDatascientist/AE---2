@@ -114,28 +114,82 @@ st.markdown(
             padding-top: 0.15rem !important;
         }
 
-        /* 4. KPI Metric Cards (Blue by default) */
+        /* 4. KPI Metric Cards (With Smooth Hover Growth & 5 Distinct Color Layers) */
         div[data-testid="stMetric"] {
-            background: linear-gradient(145deg, rgba(30, 41, 59, 0.55), rgba(15, 23, 42, 0.78)) !important;
-            border: 1px solid rgba(148, 163, 184, 0.16) !important;
-            border-top: 3px solid #3B82F6 !important;
+            border: 1px solid rgba(148, 163, 184, 0.18) !important;
             border-radius: 12px !important;
             padding: 0.6rem 0.85rem !important;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2) !important;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.22) !important;
+            transition: transform 0.22s cubic-bezier(0.22, 1, 0.36, 1),
+                        box-shadow 0.22s ease,
+                        border-color 0.22s ease !important;
+            cursor: pointer;
         }
-        
-        /* 🔴 RED Tint for Overdue Works (Aggressive target for 4th column) */
+
+        /* Slight growth & lift when mouse hovers over any KPI card */
+        div[data-testid="stMetric"]:hover {
+            transform: translateY(-3px) scale(1.03) !important;
+            box-shadow: 0 10px 24px rgba(0, 0, 0, 0.42) !important;
+        }
+
+        /* 🔵 1st Card: Royal Blue Tint for Date (Today) */
+        div[data-testid="stHorizontalBlock"] > div:nth-child(1) div[data-testid="stMetric"],
+        div[data-testid="column"]:nth-child(1) div[data-testid="stMetric"] {
+            border-top: 3px solid #3B82F6 !important;
+            background: linear-gradient(145deg, rgba(30, 58, 138, 0.40), rgba(15, 23, 42, 0.85)) !important;
+        }
+        div[data-testid="stHorizontalBlock"] > div:nth-child(1) div[data-testid="stMetric"]:hover,
+        div[data-testid="column"]:nth-child(1) div[data-testid="stMetric"]:hover {
+            border-color: rgba(59, 130, 246, 0.55) !important;
+            box-shadow: 0 10px 24px rgba(59, 130, 246, 0.22) !important;
+        }
+
+        /* 🟣 2nd Card: Violet / Purple Tint for Officers */
+        div[data-testid="stHorizontalBlock"] > div:nth-child(2) div[data-testid="stMetric"],
+        div[data-testid="column"]:nth-child(2) div[data-testid="stMetric"] {
+            border-top: 3px solid #8B5CF6 !important;
+            background: linear-gradient(145deg, rgba(88, 28, 135, 0.38), rgba(15, 23, 42, 0.85)) !important;
+        }
+        div[data-testid="stHorizontalBlock"] > div:nth-child(2) div[data-testid="stMetric"]:hover,
+        div[data-testid="column"]:nth-child(2) div[data-testid="stMetric"]:hover {
+            border-color: rgba(139, 92, 246, 0.55) !important;
+            box-shadow: 0 10px 24px rgba(139, 92, 246, 0.22) !important;
+        }
+
+        /* 🩵 3rd Card: Cyan / Teal Tint for Total Works */
+        div[data-testid="stHorizontalBlock"] > div:nth-child(3) div[data-testid="stMetric"],
+        div[data-testid="column"]:nth-child(3) div[data-testid="stMetric"] {
+            border-top: 3px solid #06B6D4 !important;
+            background: linear-gradient(145deg, rgba(22, 78, 99, 0.42), rgba(15, 23, 42, 0.85)) !important;
+        }
+        div[data-testid="stHorizontalBlock"] > div:nth-child(3) div[data-testid="stMetric"]:hover,
+        div[data-testid="column"]:nth-child(3) div[data-testid="stMetric"]:hover {
+            border-color: rgba(6, 182, 212, 0.55) !important;
+            box-shadow: 0 10px 24px rgba(6, 182, 212, 0.22) !important;
+        }
+
+        /* 🔴 4th Card: Red Tint for Overdue Works */
         div[data-testid="stHorizontalBlock"] > div:nth-child(4) div[data-testid="stMetric"],
         div[data-testid="column"]:nth-child(4) div[data-testid="stMetric"] {
             border-top: 3px solid #EF4444 !important;
-            background: linear-gradient(145deg, rgba(127, 29, 29, 0.35), rgba(15, 23, 42, 0.85)) !important;
+            background: linear-gradient(145deg, rgba(127, 29, 29, 0.38), rgba(15, 23, 42, 0.85)) !important;
+        }
+        div[data-testid="stHorizontalBlock"] > div:nth-child(4) div[data-testid="stMetric"]:hover,
+        div[data-testid="column"]:nth-child(4) div[data-testid="stMetric"]:hover {
+            border-color: rgba(239, 68, 68, 0.55) !important;
+            box-shadow: 0 10px 24px rgba(239, 68, 68, 0.25) !important;
         }
 
-        /* 🟢 GREEN Tint for ETS Works (Aggressive target for 5th column) */
+        /* 🟢 5th Card: Green Tint for ETS Works */
         div[data-testid="stHorizontalBlock"] > div:nth-child(5) div[data-testid="stMetric"],
         div[data-testid="column"]:nth-child(5) div[data-testid="stMetric"] {
             border-top: 3px solid #4ADE80 !important;
-            background: linear-gradient(145deg, rgba(6, 78, 59, 0.35), rgba(15, 23, 42, 0.85)) !important;
+            background: linear-gradient(145deg, rgba(6, 78, 59, 0.38), rgba(15, 23, 42, 0.85)) !important;
+        }
+        div[data-testid="stHorizontalBlock"] > div:nth-child(5) div[data-testid="stMetric"]:hover,
+        div[data-testid="column"]:nth-child(5) div[data-testid="stMetric"]:hover {
+            border-color: rgba(74, 222, 128, 0.55) !important;
+            box-shadow: 0 10px 24px rgba(74, 222, 128, 0.22) !important;
         }
 
         div[data-testid="stMetricValue"] {
