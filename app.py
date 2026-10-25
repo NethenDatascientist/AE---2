@@ -37,24 +37,8 @@ st.markdown(
             padding-top: 2.3rem !important;
             padding-bottom: 2rem !important;
         }
-        /* 📈 Bar Chart Container - Widget Card Style & Hover Growth */
-        [data-testid="stPlotlyChart"] {
+       [data-testid="stPlotlyChart"] {
             width: 100% !important;
-            background: linear-gradient(155deg, rgba(30, 41, 59, 0.25) 0%, rgba(15, 23, 42, 0.55) 100%) !important;
-            border: 1px solid rgba(148, 163, 184, 0.16) !important;
-            border-radius: 14px !important;
-            padding: 5px !important;
-            box-shadow: 0 6px 18px rgba(0, 0, 0, 0.22) !important;
-            transition: transform 0.25s cubic-bezier(0.22, 1, 0.36, 1), 
-                        box-shadow 0.25s ease,
-                        border-color 0.25s ease !important;
-        }
-        
-        [data-testid="stPlotlyChart"]:hover {
-            transform: translateY(-4px) scale(1.015) !important;
-            box-shadow: 0 14px 32px rgba(0, 0, 0, 0.45) !important;
-            border-color: rgba(96, 165, 250, 0.45) !important;
-            z-index: 10 !important;
         }
 
         /* 1. Narrower, Sleek Left Sidebar (200px) */
