@@ -236,11 +236,11 @@ st.markdown(
             align-items: center;
             gap: 0.75rem;
             padding: 0.4rem 0.85rem;
-            margin-top: 0.3rem;  /* Changed from -0.5rem to 0.3rem to fix the top cut-off */
+            margin-top: 0.3rem;  
             margin-bottom: 0.5rem; 
             background: linear-gradient(90deg, rgba(30, 41, 59, 0.75) 0%, rgba(15, 23, 42, 0.3) 100%);
-            border: 1px solid rgba(148, 163, 184, 0.18);
-            border-left: 4px solid #3B82F6;
+            border: none; /* Removed the outer box border */
+            border-left: 4px solid #3B82F6; /* Kept the blue accent line */
             border-radius: 8px;
             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
         }
