@@ -2412,10 +2412,10 @@ with st.expander("🔍 Inspect Worksheet Loading Status (23 Target Sheets)"):
 inject_scroll_hud_graphics(enabled=show_scroll_hud)
 
 st.error("🔍 DEBUG: Find Unassigned Works")
-# valid_df contains all data matching your top dropdown filters
-debug_df = valid_df[valid_df["_is_unassigned"] == True]
+# Filter the raw data using the actual officer column and the unassigned label
+debug_df = valid_df[valid_df[group_col] == UNASSIGNED_LABEL]
 
-# Display the exact Sheet Name, Work Name, and Status for the 2 missing rows
+# Display the exact Sheet Name, Work Name, Division, EE, and Status
 st.dataframe(
     debug_df[["sheet_name", "work_name", "division_name", "ee_name", "status_raw"]],
     use_container_width=True
