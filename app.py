@@ -1434,6 +1434,7 @@ def parse_xlsx_workbook(workbook_bytes: bytes):
             sub = pd.DataFrame(
                 {
                     "sheet_name": target,
+                    "ಕಾಮಗಾರಿ ಹೆಸರು": s_work_name,
                     "division_name": s_div_raw,
                     "subdivision_name": s_subdiv_mapped,
                     "ee_name": s_ee_mapped,
@@ -2413,4 +2414,11 @@ inject_scroll_hud_graphics(enabled=show_scroll_hud)
 
 st.error("🔍 DEBUG: Find Unassigned Works")
 debug_df = valid_df[valid_df[group_col] == UNASSIGNED_LABEL]
-st.dataframe(debug_df, use_container_width=True)
+
+if debug_df.empty:
+    st.success("🎉 No unassigned works found with current filters!")
+else:
+    st.dataframe(
+        debug_df[["sheet_name", "ಕಾಮಗಾರಿ ಹೆಸರು", "division_name", "ee_name", "status_raw"]],
+        use_container_width=True
+    )
