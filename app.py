@@ -2418,7 +2418,19 @@ debug_df = valid_df[valid_df[group_col] == UNASSIGNED_LABEL]
 if debug_df.empty:
     st.success("🎉 No unassigned works found with current filters!")
 else:
+    # Added subdivision, AE (so_name), AEE, EE, TA, and AS to the display
     st.dataframe(
-        debug_df[["sheet_name", "ಕಾಮಗಾರಿ ಹೆಸರು", "division_name", "ee_name", "status_raw"]],
+        debug_df[[
+            "sheet_name", 
+            "ಕಾಮಗಾರಿ ಹೆಸರು", 
+            "division_name", 
+            "subdivision_name",
+            "so_name", 
+            "aee_name", 
+            "ee_name", 
+            "ta_name", 
+            "as_name", 
+            "status_raw"
+        ]],
         use_container_width=True
     )
