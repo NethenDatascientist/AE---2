@@ -2410,3 +2410,13 @@ with st.expander("🔍 Inspect Worksheet Loading Status (23 Target Sheets)"):
 
 # Mount the ultra-slim 14px, writing-free right-edge scrolling HUD overlay
 inject_scroll_hud_graphics(enabled=show_scroll_hud)
+
+st.error("🔍 DEBUG: Find Unassigned Works")
+# valid_df contains all data matching your top dropdown filters
+debug_df = valid_df[valid_df["_is_unassigned"] == True]
+
+# Display the exact Sheet Name, Work Name, and Status for the 2 missing rows
+st.dataframe(
+    debug_df[["sheet_name", "work_name", "division_name", "ee_name", "status_raw"]],
+    use_container_width=True
+)
