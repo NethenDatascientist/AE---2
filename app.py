@@ -2412,25 +2412,63 @@ with st.expander("🔍 Inspect Worksheet Loading Status (23 Target Sheets)"):
 # Mount the ultra-slim 14px, writing-free right-edge scrolling HUD overlay
 inject_scroll_hud_graphics(enabled=show_scroll_hud)
 
-st.error("🔍 DEBUG: Find Unassigned Works")
-debug_df = valid_df[valid_df[group_col] == UNASSIGNED_LABEL]
+st.error("🔍 DEBUG: Find Unassigned / Missing Data Works (Across All Columns)")
+
+empty_markers = {UNASSIGNED_LABEL, UNSPECIFIED_LABEL, "", "-"}
+
+# Check if ANY of the 6 columns (Sub-division, AE, AEE, EE, TA, AS) is missing
+missing_any_mask = (
+    filtered_master_df["subdivision_name"].isin(empty_markers)
+    | filtered_master_df["so_name"].isin(empty_markers)
+    | filtered_master_df["aee_name"].isin(empty_markers)
+    | filtered_master_df["ee_name"].isin(empty_markers)
+    | filtered_master_df["ta_name"].isin(empty_markers)
+    | filtered_master_df["as_name"].isin(empty_markers)
+)
+
+debug_df = filtered_master_df[missing_any_mask].copy()
 
 if debug_df.empty:
-    st.success("🎉 No unassigned works found with current filters!")
+    st.success("🎉 No unassigned or missing fields found with current filters!")
 else:
-    # Added subdivision, AE (so_name), AEE, EE, TA, and AS to the display
+    # Build a column that explicitly lists WHICH field(s) are missing in each row
+    def _list_missing_cols(row):
+        missing = []
+        if row["subdivision_name"] in empty_markers:
+            missing.append("Sub-division")
+        if row["so_name"] in empty_markers:
+            missing.append("AE")
+        if row["aee_name"] in empty_markers:
+            missing.append("AEE")
+        if row["ee_name"] in empty_markers:
+            missing.append("EE")
+        if row["ta_name"] in empty_markers:
+            missing.append("TA")
+        if row["as_name"] in empty_markers:
+            missing.append("AS")
+        return ", ".join(missing)
+
+    debug_df["⚠️ Missing Column(s)"] = debug_df.apply(_list_missing_cols, axis=1)
+
+    desired_debug_cols = [
+        "sheet_name",
+        "⚠️ Missing Column(s)",
+        "ಕಾಮಗಾರಿ ಹೆಸರು",
+        "division_name",
+        "subdivision_name",
+        "so_name",
+        "aee_name",
+        "ee_name",
+        "ta_name",
+        "as_name",
+        "status_raw",
+    ]
+    available_debug_cols = [c for c in desired_debug_cols if c in debug_df.columns]
+
+    st.caption(
+        f"Showing **{len(debug_df):,}** work(s) where at least one column (Sub-division, AE, AEE, EE, TA, or AS) is missing:"
+    )
     st.dataframe(
-        debug_df[[
-            "sheet_name", 
-            "ಕಾಮಗಾರಿ ಹೆಸರು", 
-            "division_name", 
-            "subdivision_name",
-            "so_name", 
-            "aee_name", 
-            "ee_name", 
-            "ta_name", 
-            "as_name", 
-            "status_raw"
-        ]],
-        use_container_width=True
+        debug_df[available_debug_cols],
+        use_container_width=True,
     )
