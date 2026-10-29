@@ -234,6 +234,7 @@ st.markdown(
         .premium-compact-header {
             display: flex;
             align-items: center;
+            justify-content: center;
             gap: 0.75rem;
             padding: 0.4rem 0; /* Removed side padding so it aligns flush left */
             margin-top: 0.3rem;  
