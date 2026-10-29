@@ -255,12 +255,21 @@ st.markdown(
             box-shadow: 0 0 10px rgba(59, 130, 246, 0.25);
         }
         .premium-compact-title {
-            font-size: 1.4rem;
-            font-weight: 800;
-            color: #F8FAFC;
-            margin: 0;
-            letter-spacing: -0.2px;
-            line-height: 1;
+            font-family: 'Montserrat', sans-serif !important;
+            font-size: clamp(0.92rem, 4.2vw, 1.18rem) !important;
+            font-weight: 800 !important;
+            
+            /* Stylish silver/white text gradient */
+            background: linear-gradient(90deg, #FFFFFF 0%, #CBD5E1 100%) !important;
+            -webkit-background-clip: text !important;
+            -webkit-text-fill-color: transparent !important;
+            
+            margin: 0 !important;
+            line-height: 1.25 !important;
+            letter-spacing: -0.2px !important;
+            white-space: nowrap !important;
+            overflow: hidden !important;
+            text-overflow: ellipsis !important;
         }
         /* Status Bar Banner */
         .mi-status-bar {
@@ -419,7 +428,7 @@ def inject_scroll_hud_graphics(enabled: bool = True):
             const style = parentDoc.createElement("style");
             style.id = "mi-scroll-hud-style";
             style.innerHTML = `
-                @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@600;700&display=swap');
+                @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Montserrat:wght@700;800&display=swap');
 
                 #mi-scroll-hud-root {{
                     position: fixed !important;
