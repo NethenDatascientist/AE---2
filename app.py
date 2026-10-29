@@ -256,7 +256,7 @@ st.markdown(
         }
         .premium-compact-title {
             font-family: 'Montserrat', sans-serif !important;
-            font-size: clamp(0.92rem, 4.2vw, 1.18rem) !important;
+            font-size: clamp(0.92rem, 4.2vw, 1.75rem) !important;
             font-weight: 800 !important;
             
             /* Stylish silver/white text gradient */
