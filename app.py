@@ -234,14 +234,15 @@ st.markdown(
         .premium-compact-header {
             display: flex;
             align-items: center;
-            justify-content: center;
-            gap: 0.75rem;
-            padding: 0.4rem 0; /* Removed side padding so it aligns flush left */
-            margin-top: 0.3rem;  
-            margin-bottom: 0.5rem; 
-            background: transparent; /* Removed the gradient */
-            border: none; /* Removed all borders */
-            box-shadow: none; /* Removed the box shadow */
+            justify-content: center; /* <-- ADD THIS LINE TO CENTER IT */
+            gap: 0.5rem;
+            padding: 0.2rem 0;
+            margin-top: 0.15rem;
+            margin-bottom: 0.5rem;
+            background: transparent;
+            border: none;
+            width: 100%;
+            overflow: hidden;
         }
         .premium-icon-wrapper {
             display: flex;
