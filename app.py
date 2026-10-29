@@ -1659,8 +1659,7 @@ show_scroll_hud = st.sidebar.checkbox(
 st.markdown(
     """
     <div class="premium-compact-header">
-        <div class="premium-icon-wrapper">📊</div>
-        <h1 class="premium-compact-title">Minor Irrigation — Overdue Works Dashboard</h1>
+        <h1 class="premium-compact-title">Minor Irrigation - Overdue Works Dashboard</h1>
     </div>
     """,
     unsafe_allow_html=True,
